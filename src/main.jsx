@@ -71,19 +71,78 @@ function Shell({profile,draftId,setDraftId}){
   const[data,setData]=useState({draft:null,teams:[],players:[],picks:[],queues:[]});
   
 
-  useEffect(()=>{
-    supabase
-      .from('drafts')
-      .select('*')
-      .order('created_at',{ascending:false})
-      .then(({data})=>{
-        setDrafts(data||[]);
-        if(!draftId&&data?.[0]){
-          setDraftId(data[0].id);
-          localStorage.draftId=data[0].id;
-        }
-      });
-  },[]);
+useEffect(() => {
+  loadAvailableDrafts();
+}, [profile?.id]);
+
+async function loadAvailableDrafts() {
+  if (profile?.role === "admin") {
+    const { data, error } = await supabase
+      .from("drafts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) return alert(error.message);
+
+    setDrafts(data || []);
+
+    if (!draftId && data?.[0]) {
+      setDraftId(data[0].id);
+      localStorage.draftId = data[0].id;
+    }
+
+    return;
+  }
+
+  if (profile?.role === "commissioner") {
+    const { data: accessRows, error: accessError } = await supabase
+      .from("draft_commissioners")
+      .select("draft_id")
+      .eq("user_id", profile.id);
+
+    if (accessError) return alert(accessError.message);
+
+    const draftIds = (accessRows || []).map((x) => x.draft_id);
+
+    if (draftIds.length === 0) {
+      setDrafts([]);
+      setDraftId("");
+      localStorage.removeItem("draftId");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("drafts")
+      .select("*")
+      .in("id", draftIds)
+      .order("created_at", { ascending: false });
+
+    if (error) return alert(error.message);
+
+    setDrafts(data || []);
+
+    if (!draftId && data?.[0]) {
+      setDraftId(data[0].id);
+      localStorage.draftId = data[0].id;
+    }
+
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("drafts")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) return alert(error.message);
+
+  setDrafts(data || []);
+
+  if (!draftId && data?.[0]) {
+    setDraftId(data[0].id);
+    localStorage.draftId = data[0].id;
+  }
+}
 
   useEffect(()=>{
     if(!draftId)return;
@@ -118,6 +177,28 @@ function Shell({profile,draftId,setDraftId}){
 
   const isAdmin=profile.role==='admin';
   const isComm=profile.role==='commissioner'||isAdmin;
+
+if (
+  profile?.role === "commissioner" &&
+  drafts.length === 0
+) {
+  return (
+    <div className="loading">
+      <h1>No Draft Access</h1>
+
+      <p>
+        You have not been assigned to any drafts.
+        Please contact your administrator.
+      </p>
+
+      <button
+        onClick={() => supabase.auth.signOut()}
+      >
+        Sign Out
+      </button>
+    </div>
+  );
+}
 
   if (isAdmin && viewMode === "admin") {
     return (
@@ -245,6 +326,24 @@ async function makePick(player, team = currentTeam) {
     };
   }
 
+	async function undoLastPick() {
+	  if (!draft?.id) return alert("No draft selected.");
+
+	  const confirmUndo = window.confirm("Undo the last draft pick?");
+	  if (!confirmUndo) return;
+
+	  const { error } = await supabase.rpc("undo_last_pick", {
+	    target_draft_id: draft.id,
+	  });
+
+	  if (error) {
+	    console.error(error);
+	    return alert(error.message);
+	  }
+
+	  await reload();
+	}
+
   async function pause(status){
     await supabase
       .from('drafts')
@@ -303,6 +402,7 @@ async function makePick(player, team = currentTeam) {
           <div className="actions">
             <button onClick={()=>pause('live')}><Play size={16}/>Start</button>
             <button onClick={()=>pause('paused')}><Pause size={16}/>Pause</button>
+	    <button onClick={undoLastPick}>Undo Last Pick</button>
             <button onClick={randomize}><Shuffle size={16}/>Randomize</button>
             <button onClick={()=>exportDraft(data)}><Download size={16}/>Export XLS</button>
           </div>

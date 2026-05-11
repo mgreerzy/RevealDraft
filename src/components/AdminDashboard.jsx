@@ -31,9 +31,14 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState("coach");
 
+  const [accessRows, setAccessRows] = useState([]);
+  const [accessDraftId, setAccessDraftId] = useState("");
+  const [accessUserId, setAccessUserId] = useState("");
+
   useEffect(() => {
     loadDrafts();
     loadProfiles();
+    loadCommissionerAccess();
   }, []);
 
   useEffect(() => {
@@ -43,21 +48,120 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
     }
   }, [selectedDraft]);
 
-  async function loadDrafts() {
-    const { data, error } = await supabase
+async function loadDrafts() {
+  let query;
+
+  if (profile?.role === "admin") {
+    query = supabase
       .from("drafts")
       .select("*")
       .order("created_at", { ascending: false });
+  } else if (profile?.role === "commissioner") {
+    const { data: accessRows, error: accessError } = await supabase
+      .from("draft_commissioners")
+      .select("draft_id")
+      .eq("user_id", profile.id);
 
-    if (error) return alert(error.message);
-
-    setDrafts(data || []);
-
-    if (data?.length && !selectedDraft) {
-      setSelectedDraft(data[0]);
-      loadDraftIntoForm(data[0]);
+    if (accessError) {
+      return alert(accessError.message);
     }
+
+    const draftIds = accessRows.map((x) => x.draft_id);
+
+    query = supabase
+      .from("drafts")
+      .select("*")
+      .in("id", draftIds)
+      .order("created_at", { ascending: false });
+  } else {
+    setDrafts([]);
+    return;
   }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return alert(error.message);
+  }
+
+  setDrafts(data || []);
+
+  if (data?.length && !selectedDraft) {
+    setSelectedDraft(data[0]);
+    loadDraftIntoForm(data[0]);
+  }
+}
+
+async function loadCommissionerAccess() {
+  const { data, error } = await supabase
+    .from("draft_commissioners")
+    .select("id, draft_id, user_id")
+    .order("created_at", { ascending: false });
+
+  if (error) return alert(error.message);
+
+  setAccessRows(data || []);
+}
+
+async function grantCommissionerAccess() {
+  if (!accessDraftId || !accessUserId) {
+    return alert("Select a draft and commissioner");
+  }
+
+  const { error } = await supabase
+    .from("draft_commissioners")
+    .insert({
+      draft_id: accessDraftId,
+      user_id: accessUserId,
+    });
+
+  if (error) return alert(error.message);
+
+  setAccessDraftId("");
+  setAccessUserId("");
+  await loadCommissionerAccess();
+
+  alert("Access granted");
+}
+
+async function removeCommissionerAccess(id) {
+  const confirmRemove = window.confirm("Remove this commissioner's access?");
+  if (!confirmRemove) return;
+
+  const { error } = await supabase
+    .from("draft_commissioners")
+    .delete()
+    .eq("id", id);
+
+  if (error) return alert(error.message);
+
+  await loadCommissionerAccess();
+}
+
+	async function resetUserPassword(userId, email) {
+	  const password = window.prompt(`Enter a new temporary password for ${email}`);
+
+	  if (!password) return alert("Password reset cancelled");
+
+	  if (password.length < 6) {
+	    return alert("Password must be at least 6 characters");
+	  }
+
+	  const { data, error } = await supabase.functions.invoke("reset-user-password", {
+	    body: {
+	      userId,
+	      password,
+	    },
+	  });
+
+	  if (error) return alert(error.message);
+
+	  if (!data?.success) {
+	    return alert(data?.error || "Password reset failed");
+	  }
+
+	  alert(`Password reset for ${email}`);
+	}
 
   async function loadProfiles() {
     const { data, error } = await supabase
@@ -566,6 +670,11 @@ function openLink(path) {
 	<button onClick={() => setActiveTab("links")}>
   	  Viewing Links
 	</button>
+
+	<button onClick={() => setActiveTab("commissionerAccess")}>
+	  Commissioner Access
+	</button>
+
       </aside>
 
       <main className="admin-main">
@@ -621,6 +730,67 @@ function openLink(path) {
 	    )}
 	  </section>
 	)}
+
+{activeTab === "commissionerAccess" && (
+  <section className="admin-card">
+    <h2>Commissioner Access</h2>
+
+    <label>Draft</label>
+    <select
+      value={accessDraftId}
+      onChange={(e) => setAccessDraftId(e.target.value)}
+    >
+      <option value="">Select draft</option>
+      {drafts.map((d) => (
+        <option key={d.id} value={d.id}>
+          {d.name}
+        </option>
+      ))}
+    </select>
+
+    <label>Commissioner</label>
+    <select
+      value={accessUserId}
+      onChange={(e) => setAccessUserId(e.target.value)}
+    >
+      <option value="">Select commissioner</option>
+      {profiles
+        .filter((p) => p.role === "commissioner")
+        .map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.email}
+          </option>
+        ))}
+    </select>
+
+    <button onClick={grantCommissionerAccess}>
+      Grant Access
+    </button>
+
+    <h3>Existing Access</h3>
+
+    {accessRows.length === 0 ? (
+      <p>No commissioner access has been assigned.</p>
+    ) : (
+      accessRows.map((row) => {
+        const draft = drafts.find((d) => d.id === row.draft_id);
+        const user = profiles.find((p) => p.id === row.user_id);
+
+        return (
+          <div key={row.id} className="admin-row">
+            <span>
+              {user?.email || "Unknown commissioner"} → {draft?.name || "Unknown draft"}
+            </span>
+
+            <button onClick={() => removeCommissionerAccess(row.id)}>
+              Remove
+            </button>
+          </div>
+        );
+      })
+    )}
+  </section>
+)}
 
         {activeTab === "settings" && (
           <section className="admin-card">
@@ -892,31 +1062,41 @@ teams.map((t) => (
                 >
                   <span>{p.email}</span>
 
-                  <select
-                    value={p.role || "coach"}
-                    onChange={(e) =>
-                      updateRole(
-                        p.id,
-                        e.target.value
-                      )
-                    }
-                  >
-                    <option value="admin">
-                      admin
-                    </option>
+		  <select
+		    value={p.role || "coach"}
+		    onChange={(e) =>
+		      updateRole(
+		        p.id,
+		        e.target.value
+		      )
+		    }
+		  >
+		    <option value="admin">
+		      admin
+		    </option>
 
-                    <option value="commissioner">
-                      commissioner
-                    </option>
+		    <option value="commissioner">
+		      commissioner
+		    </option>
 
-                    <option value="coach">
-                      coach
-                    </option>
+		    <option value="coach">
+		      coach
+		    </option>
 
-                    <option value="viewer">
-                      viewer
-                    </option>
-                  </select>
+		    <option value="viewer">
+		      viewer
+		    </option>
+		  </select>
+
+		  {profile?.role === "admin" && (
+		    <button
+		      onClick={() =>
+		        resetUserPassword(p.id, p.email)
+		      }
+		    >
+		      Reset Password
+		    </button>
+		  )}
                 </div>
               ))
             )}
