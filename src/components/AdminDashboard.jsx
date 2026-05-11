@@ -35,6 +35,15 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
   const [accessDraftId, setAccessDraftId] = useState("");
   const [accessUserId, setAccessUserId] = useState("");
 
+  const [newFirstName, setNewFirstName] = useState("");
+  const [newLastName, setNewLastName] = useState("");
+
+  const [keeperPlayerId, setKeeperPlayerId] = useState("");
+  const [keeperTeamId, setKeeperTeamId] = useState("");
+  const [keeperRound, setKeeperRound] = useState(1);
+  const [keeperPhase, setKeeperPhase] = useState("any");
+  const [keeperIsCoach, setKeeperIsCoach] = useState(false);
+
   useEffect(() => {
     loadDrafts();
     loadProfiles();
@@ -47,6 +56,55 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
       loadPlayers();
     }
   }, [selectedDraft]);
+
+async function assignKeeperPlayer() {
+  if (!keeperPlayerId || !keeperTeamId || !keeperRound) {
+    return alert("Select a player, team, and round");
+  }
+
+  const { error } = await supabase
+    .from("players")
+    .update({
+      assigned_team_id: keeperTeamId,
+      keeper_round: Number(keeperRound),
+      keeper_phase: keeperPhase,
+      is_coach: keeperIsCoach,
+      keeper_note: keeperIsCoach ? "Coach pre-draft assignment" : "Keeper assignment",
+    })
+    .eq("id", keeperPlayerId);
+
+  if (error) return alert(error.message);
+
+  setKeeperPlayerId("");
+  setKeeperTeamId("");
+  setKeeperRound(1);
+  setKeeperPhase("any");
+  setKeeperIsCoach(false);
+
+  await loadPlayers();
+
+  alert("Player assignment saved");
+}
+
+async function removeKeeperAssignment(playerId) {
+  const confirmRemove = window.confirm("Remove this pre-draft assignment?");
+  if (!confirmRemove) return;
+
+  const { error } = await supabase
+    .from("players")
+    .update({
+      assigned_team_id: null,
+      keeper_round: null,
+      keeper_phase: null,
+      keeper_note: null,
+      is_coach: false,
+    })
+    .eq("id", playerId);
+
+  if (error) return alert(error.message);
+
+  await loadPlayers();
+}
 
 async function loadDrafts() {
   let query;
@@ -522,11 +580,13 @@ async function resetDraftProgressOnly() {
       await supabase.functions.invoke(
         "create-user",
         {
-          body: {
-            email: newUserEmail,
-            password: newUserPassword,
-            role: newUserRole,
-          },
+	  body: {
+	    email: newUserEmail,
+	    password: newUserPassword,
+	    role: newUserRole,
+	    first_name: newFirstName,
+	    last_name: newLastName,
+	  },
         }
       );
 
@@ -540,6 +600,8 @@ async function resetDraftProgressOnly() {
 
     setNewUserEmail("");
     setNewUserPassword("");
+    setNewFirstName("");
+    setNewLastName("");
 
     await loadProfiles();
   }
@@ -671,6 +733,10 @@ function openLink(path) {
   	  Viewing Links
 	</button>
 
+	<button onClick={() => setActiveTab("keepers")}>
+	  Keepers / Coach Picks
+	</button>
+
 	<button onClick={() => setActiveTab("commissionerAccess")}>
 	  Commissioner Access
 	</button>
@@ -731,6 +797,94 @@ function openLink(path) {
 	  </section>
 	)}
 
+{activeTab === "keepers" && (
+  <section className="admin-card">
+    <h2>Keepers / Coach Picks</h2>
+
+    <label>Player</label>
+    <select
+      value={keeperPlayerId}
+      onChange={(e) => setKeeperPlayerId(e.target.value)}
+    >
+      <option value="">Select player</option>
+      {players.map((p) => (
+        <option key={p.id} value={p.id}>
+          #{p.random_number} — {p.name} — {p.gender} — {p.primary_position}/{p.secondary_position}
+        </option>
+      ))}
+    </select>
+
+    <label>Team</label>
+    <select
+      value={keeperTeamId}
+      onChange={(e) => setKeeperTeamId(e.target.value)}
+    >
+      <option value="">Select team</option>
+      {teams.map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
+      ))}
+    </select>
+
+    <label>Round</label>
+    <input
+      type="number"
+      min="1"
+      value={keeperRound}
+      onChange={(e) => setKeeperRound(e.target.value)}
+    />
+
+    <label>Phase</label>
+    <select
+      value={keeperPhase}
+      onChange={(e) => setKeeperPhase(e.target.value)}
+    >
+      <option value="any">Any</option>
+      <option value="female">Female</option>
+      <option value="male">Male</option>
+    </select>
+
+    <label>
+      <input
+        type="checkbox"
+        checked={keeperIsCoach}
+        onChange={(e) => setKeeperIsCoach(e.target.checked)}
+      />
+      This player is the coach
+    </label>
+
+    <button onClick={assignKeeperPlayer}>
+      Save Assignment
+    </button>
+
+    <h3>Current Assignments</h3>
+
+    {players.filter((p) => p.assigned_team_id).length === 0 ? (
+      <p>No pre-draft assignments have been added.</p>
+    ) : (
+      players
+        .filter((p) => p.assigned_team_id)
+        .map((p) => {
+          const team = teams.find((t) => t.id === p.assigned_team_id);
+
+          return (
+            <div key={p.id} className="admin-row">
+              <span>
+                {p.name} → {team?.name || "Unknown Team"} — Round {p.keeper_round || 1}
+                {p.is_coach ? " — Coach" : ""}
+              </span>
+
+              <button onClick={() => removeKeeperAssignment(p.id)}>
+                Remove
+              </button>
+            </div>
+          );
+        })
+    )}
+  </section>
+)}
+
 {activeTab === "commissionerAccess" && (
   <section className="admin-card">
     <h2>Commissioner Access</h2>
@@ -758,7 +912,7 @@ function openLink(path) {
         .filter((p) => p.role === "commissioner")
         .map((p) => (
           <option key={p.id} value={p.id}>
-            {p.email}
+            {`${p.first_name || ""} ${p.last_name || ""}`.trim()} ({p.email})
           </option>
         ))}
     </select>
@@ -909,7 +1063,7 @@ function openLink(path) {
 
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.email}
+                  {`${p.first_name || ""} ${p.last_name || ""}`.trim()} ({p.email})
                 </option>
               ))}
             </select>
@@ -955,7 +1109,7 @@ teams.map((t) => (
       <option value="">No coach assigned</option>
       {profiles.map((p) => (
         <option key={p.id} value={p.id}>
-          {p.email} — {p.role}
+          {`${p.first_name || ""} ${p.last_name || ""}`.trim()} ({p.email}) — {p.role}
         </option>
       ))}
     </select>
@@ -1012,6 +1166,18 @@ teams.map((t) => (
             <h3>Create User</h3>
 
             <input
+              placeholder="First Name"
+              value={newFirstName}
+              onChange={(e) => setNewFirstName(e.target.value)}
+            />
+
+            <input
+              placeholder="Last Name"
+              value={newLastName}
+              onChange={(e) => setNewLastName(e.target.value)}
+            />
+            
+            <input
               placeholder="Email"
               value={newUserEmail}
               onChange={(e) =>
@@ -1060,7 +1226,7 @@ teams.map((t) => (
                   key={p.id}
                   className="admin-row"
                 >
-                  <span>{p.email}</span>
+                  <span>{`${p.first_name || ""} ${p.last_name || ""}`.trim()} ({p.email})</span>
 
 		  <select
 		    value={p.role || "coach"}

@@ -179,7 +179,7 @@ async function loadAvailableDrafts() {
   const isComm=profile.role==='commissioner'||isAdmin;
 
 if (
-  profile?.role === "commissioner" &&
+  ["commissioner", "coach"].includes(profile?.role) &&
   drafts.length === 0
 ) {
   return (
@@ -187,7 +187,7 @@ if (
       <h1>No Draft Access</h1>
 
       <p>
-        You have not been assigned to any drafts.
+        You have not been assigned to any drafts yet.
         Please contact your administrator.
       </p>
 
@@ -264,8 +264,15 @@ function DraftRoom({data,profile,isComm,reload}){
   const{draft,teams,players,picks,queues}=data;
   const myTeam=teams.find(t=>t.coach_user_id===profile.id);
   const currentTeam=snakeTeamAt(teams,draft.current_pick_index);
+  const currentRound = roundFor(teams, draft.current_pick_index);
   const currentPhase=draft.type==='coed'?draft.current_phase:'any';
-  const available=players.filter(p=>!p.drafted_team_id&&!p.is_coach&&(currentPhase==='any'||p.gender===currentPhase||p.gender==='any'));
+  const available=players.filter(
+  p =>
+    !p.drafted_team_id &&
+    !p.assigned_team_id &&
+    !p.is_coach &&
+    (currentPhase==='any'||p.gender===currentPhase||p.gender==='any')
+);
   const canPick=(isComm||currentTeam?.id===myTeam?.id)&&draft.status==='live';
   const[tab,setTab]=useState('available');
   const[flash,setFlash]=useState(null);
@@ -281,6 +288,38 @@ function DraftRoom({data,profile,isComm,reload}){
       setTimeout(()=>setFlash(null),20000);
     }
   },[draft.reveal_pick_id]);
+
+useEffect(() => {
+  if (!isComm) return;
+  if (draft.status !== "live") return;
+  if (!currentTeam) return;
+
+  const autoPlayer = players.find((p) => {
+    const phaseMatch =
+      currentPhase === "any" ||
+      p.keeper_phase === "any" ||
+      p.keeper_phase === currentPhase ||
+      p.gender === currentPhase;
+
+    return (
+      p.assigned_team_id === currentTeam.id &&
+      Number(p.keeper_round) === Number(currentRound) &&
+      !p.drafted_team_id &&
+      phaseMatch
+    );
+  });
+
+  if (autoPlayer) {
+    makePick(autoPlayer, currentTeam);
+  }
+}, [
+  draft.current_pick_index,
+  draft.status,
+  currentTeam?.id,
+  currentRound,
+  currentPhase,
+  players.length,
+]);
 
 async function makePick(player, team = currentTeam) {
   if (!team || !player) {

@@ -46,7 +46,13 @@ serve(async (req) => {
       throw new Error("Only admins can create users");
     }
 
-    const { email, password, role } = await req.json();
+    const {
+  email,
+  password,
+  role,
+  first_name,
+  last_name,
+} = await req.json();
 
     if (!email || !password || !role) {
       throw new Error("Email, password, and role are required");
@@ -63,13 +69,15 @@ serve(async (req) => {
 
     const newUserId = createdUser.user.id;
 
-    const { error: profileError } = await adminClient
-      .from("profiles")
-      .upsert({
-        id: newUserId,
-        email,
-        role,
-      });
+const { error: profileError } = await adminClient
+  .from("profiles")
+  .upsert({
+    id: newUserId,
+    email,
+    role,
+    first_name,
+    last_name,
+  });
 
     if (profileError) throw profileError;
 
