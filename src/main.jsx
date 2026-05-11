@@ -8,6 +8,7 @@ import{supabase}from'./lib/supabase';
 import{snakeTeamAt,roundFor,shuffle}from'./lib/draftLogic';
 import{exportDraft}from'./lib/exportExcel';
 import AdminDashboard from './components/AdminDashboard';
+import { playSound } from "./lib/sounds";
 
 const logo='/revealdraft-logo.jpeg';
 
@@ -34,6 +35,7 @@ function App(){
   },[session]);
 
   if(location.pathname.startsWith('/tv'))return <TV/>;
+  if(location.pathname.startsWith('/viewer'))return <Viewer/>;
   if(!session)return <Login/>;
 
   return <Shell profile={profile} drafts={drafts} setDrafts={setDrafts} draftId={draftId} setDraftId={setDraftId}/>;
@@ -64,8 +66,10 @@ function Login(){
 }
 
 function Shell({profile,draftId,setDraftId}){
+  const [viewMode, setViewMode] = useState("draft");
   const[drafts,setDrafts]=useState([]);
   const[data,setData]=useState({draft:null,teams:[],players:[],picks:[],queues:[]});
+  
 
   useEffect(()=>{
     supabase
@@ -115,8 +119,13 @@ function Shell({profile,draftId,setDraftId}){
   const isAdmin=profile.role==='admin';
   const isComm=profile.role==='commissioner'||isAdmin;
 
-  if(isAdmin){
-    return <AdminDashboard profile={profile}/>;
+  if (isAdmin && viewMode === "admin") {
+    return (
+      <AdminDashboard
+        profile={profile}
+        onSwitchToDraft={() => setViewMode("draft")}
+      />
+    );
   }
 
   return (
@@ -136,6 +145,12 @@ function Shell({profile,draftId,setDraftId}){
 
         <span className="pill">{profile.role}</span>
         <button onClick={()=>supabase.auth.signOut()}>Sign Out</button>
+
+{isComm && (
+  <button onClick={() => setViewMode("admin")}>
+    Admin Dashboard
+  </button>
+)}
       </header>
 
       <main>
@@ -177,42 +192,37 @@ function DraftRoom({data,profile,isComm,reload}){
   useEffect(()=>{
     if(draft.reveal_pick_id){
       setFlash('pick');
-      setTimeout(()=>setFlash('reveal'),2200);
-      setTimeout(()=>setFlash(null),10000);
+      playSound("pick");
+      setTimeout(() => {
+        setFlash('reveal');
+        playSound("reveal");
+      }, 5000);
+      setTimeout(()=>setFlash(null),20000);
     }
   },[draft.reveal_pick_id]);
 
-  async function makePick(player,team=currentTeam){
-    if(!team||!player)return;
-    const pickNo=picks.length+1;
-    const phase=currentPhase;
-
-    const{data:pick}=await supabase
-      .from('picks')
-      .insert({
-        draft_id:draft.id,
-        pick_number:pickNo,
-        phase,
-        round_number:roundFor(teams,draft.current_pick_index),
-        team_id:team.id,
-        player_id:player.id,
-        made_by:profile.id
-      })
-      .select()
-      .single();
-
-    await supabase
-      .from('players')
-      .update({drafted_team_id:team.id,drafted_pick_id:pick.id})
-      .eq('id',player.id);
-
-    await supabase
-      .from('drafts')
-      .update(nextDraftState(draft,teams,players,pick.id))
-      .eq('id',draft.id);
-
-    beep();
+async function makePick(player, team = currentTeam) {
+  if (!team || !player) {
+    return alert("Missing team or player.");
   }
+
+  const { error } = await supabase.rpc("make_draft_pick", {
+    target_draft_id: draft.id,
+    target_team_id: team.id,
+    target_player_id: player.id,
+    made_by_user_id: profile.id,
+    pick_phase: currentPhase,
+    round_num: roundFor(teams, draft.current_pick_index),
+  });
+
+  if (error) {
+    console.error(error);
+    return alert(error.message);
+  }
+
+  playSound("pick");
+  await reload();
+}
 
   function nextDraftState(){
     let idx=draft.current_pick_index+1;
@@ -273,7 +283,14 @@ function DraftRoom({data,profile,isComm,reload}){
   return (
     <section className="draft">
       <AnimatePresence>
-        {flash&&<RevealOverlay mode={flash} pick={picks.find(p=>p.id===draft.reveal_pick_id)} players={players} teams={teams}/>}
+        {flash&&<RevealOverlay
+  	  mode={flash}
+  	  pick={picks.find(p=>p.id===draft.reveal_pick_id)}
+  	  players={players}
+ 	  teams={teams}
+  	  currentTeam={currentTeam}
+  	  nextTeam={snakeTeamAt(teams,draft.current_pick_index+1)}
+	  />}
       </AnimatePresence>
 
       <div className="scorebar">
@@ -293,7 +310,7 @@ function DraftRoom({data,profile,isComm,reload}){
       </div>
 
       <nav className="tabs">
-        {['available','picks','roster','queue','teams','commissioner']
+        {['available','picks','roster','positions','queue','teams','commissioner']
           .filter(x=>x!=='commissioner'||isComm)
           .map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}
       </nav>
@@ -301,10 +318,67 @@ function DraftRoom({data,profile,isComm,reload}){
       {tab==='available'&&<PlayerGrid players={available} makePick={makePick} canPick={canPick} addQueue={addQueue}/>}
       {tab==='picks'&&<PickList picks={picks} players={players} teams={teams}/>}
       {tab==='roster'&&<Roster team={myTeam} players={players}/>}
-      {tab==='queue'&&<Queue queues={queues} team={myTeam} players={players} makePick={makePick} canPick={canPick}/>}
+      {tab==='positions'&&<PositionCounts team={myTeam} players={players}/>}
+      {tab==='queue'&&<Queue
+  queues={queues}
+  team={myTeam}
+  players={players}
+  makePick={makePick}
+  canPick={canPick}
+  reload={reload}
+/>}
       {tab==='teams'&&<AllRosters teams={teams} players={players}/>}
       {tab==='commissioner'&&<CommissionerTools draft={draft} teams={teams} players={players} makePick={makePick}/>}
     </section>
+  );
+}
+
+function PositionCounts({ team, players }) {
+  if (!team) return <p>No team assigned.</p>;
+
+  const roster = players.filter(
+    (p) => p.drafted_team_id === team.id || p.assigned_team_id === team.id
+  );
+
+  const counts = {};
+
+  roster.forEach((p) => {
+    const primary = p.primary_position || "Unknown";
+    const secondary = p.secondary_position || "";
+
+    counts[primary] = (counts[primary] || 0) + 1;
+
+    if (secondary && secondary !== primary) {
+      counts[secondary] = (counts[secondary] || 0) + 1;
+    }
+  });
+
+  const rows = Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]));
+
+  if (rows.length === 0) {
+    return <p>No players on roster yet.</p>;
+  }
+
+  return (
+    <div className="panel">
+      <h2>Position Counts</h2>
+
+      <table>
+        <tbody>
+          <tr>
+            <th>Position</th>
+            <th>Players</th>
+          </tr>
+
+          {rows.map(([position, count]) => (
+            <tr key={position}>
+              <td>{position}</td>
+              <td>{count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -384,22 +458,80 @@ function PlayerNames({players}){
   return <ul>{players.map(p=><li key={p.id}><b>#{p.random_number}</b> {p.name} — {p.primary_position}/{p.secondary_position}</li>)}</ul>;
 }
 
-function Queue({queues,team,players,makePick,canPick}){
-  const list=queues
-    .filter(q=>q.team_id===team?.id)
-    .map(q=>players.find(p=>p.id===q.player_id))
-    .filter(Boolean)
-    .filter(p=>!p.drafted_team_id);
+function Queue({ queues, team, players, makePick, canPick, reload }) {
+  async function removeFromQueue(queueId) {
+    const { error } = await supabase.from("queues").delete().eq("id", queueId);
+    if (error) return alert(error.message);
+    if (reload) reload();
+  }
+
+  async function moveQueueItem(queueItem, direction) {
+    const teamQueue = queues
+      .filter((q) => q.team_id === team?.id)
+      .sort((a, b) => a.rank - b.rank);
+
+    const currentIndex = teamQueue.findIndex((q) => q.id === queueItem.id);
+    const swapIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+    if (swapIndex < 0 || swapIndex >= teamQueue.length) return;
+
+    const swapItem = teamQueue[swapIndex];
+
+    const { error: firstError } = await supabase
+      .from("queues")
+      .update({ rank: swapItem.rank })
+      .eq("id", queueItem.id);
+
+    if (firstError) return alert(firstError.message);
+
+    const { error: secondError } = await supabase
+      .from("queues")
+      .update({ rank: queueItem.rank })
+      .eq("id", swapItem.id);
+
+    if (secondError) return alert(secondError.message);
+
+    if (reload) reload();
+  }
+
+  if (!team) return <p>No team assigned.</p>;
+
+  const list = queues
+    .filter((q) => q.team_id === team.id)
+    .sort((a, b) => a.rank - b.rank)
+    .map((q) => ({
+      queueItem: q,
+      player: players.find((p) => p.id === q.player_id),
+    }))
+    .filter((x) => x.player)
+    .filter((x) => !x.player.drafted_team_id);
+
+  if (list.length === 0) return <p>Your queue is empty.</p>;
 
   return (
     <div className="grid">
-      {list.map(p=>
-        <div className="card" key={p.id}>
-          <h2>#{p.random_number}</h2>
-          <p>{p.primary_position}/{p.secondary_position}</p>
-          <button disabled={!canPick} onClick={()=>makePick(p)}>Draft</button>
+      {list.map(({ queueItem, player }, index) => (
+        <div className="card" key={queueItem.id}>
+          <h2>#{player.random_number}</h2>
+          <p>{player.primary_position}/{player.secondary_position}</p>
+
+          <button disabled={!canPick} onClick={() => makePick(player)}>
+            Draft
+          </button>
+
+          <button disabled={index === 0} onClick={() => moveQueueItem(queueItem, "up")}>
+            Move Up
+          </button>
+
+          <button disabled={index === list.length - 1} onClick={() => moveQueueItem(queueItem, "down")}>
+            Move Down
+          </button>
+
+          <button onClick={() => removeFromQueue(queueItem.id)}>
+            Remove
+          </button>
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -478,7 +610,7 @@ function CommissionerTools({draft,teams,players,makePick}){
   );
 }
 
-function RevealOverlay({mode,pick,players,teams}){
+function RevealOverlay({mode,pick,players,teams,currentTeam,nextTeam}){
   const p=players.find(x=>x.id===pick?.player_id)||{};
   const t=teams.find(x=>x.id===pick?.team_id)||{};
 
@@ -491,6 +623,15 @@ function RevealOverlay({mode,pick,players,teams}){
             <h1>{p.name}</h1>
             <h2>#{p.random_number}</h2>
             <p>{p.primary_position} / {p.secondary_position}</p>
+		<div className="reveal-bottom-left">
+  		<div className="reveal-lower-label">ON THE CLOCK</div>
+ 		 <div className="reveal-lower-team">{currentTeam?.name || "—"}</div>
+		</div>
+
+		<div className="reveal-bottom-right">
+  		<div className="reveal-lower-label">NEXT PICK</div>
+ 		 <div className="reveal-lower-team">{nextTeam?.name || "—"}</div>
+		</div>
           </motion.div>
       }
     </motion.div>
@@ -506,9 +647,9 @@ function TV(){
 
     if(d){
       const[teams,players,picks]=await Promise.all([
-        supabase.from('teams').select('*').eq('draft_id',d.id),
+        supabase.from('teams').select('*').eq('draft_id',d.id).order('draft_order'),
         supabase.from('players').select('*').eq('draft_id',d.id),
-        supabase.from('picks').select('*').eq('draft_id',d.id)
+        supabase.from('picks').select('*').eq('draft_id',d.id).order('pick_number')
       ]);
 
       setData({
@@ -524,7 +665,7 @@ function TV(){
     if(code){
       load();
       const ch=supabase
-        .channel('tv')
+        .channel('tv-'+code)
         .on('postgres_changes',{event:'*',schema:'public'},load)
         .subscribe();
 
@@ -536,6 +677,7 @@ function TV(){
     return (
       <div className="login">
         <img src={logo}/>
+        <h1>RevealDraft TV</h1>
         <input placeholder="TV code" onChange={e=>setCode(e.target.value)}/>
       </div>
     );
@@ -543,15 +685,129 @@ function TV(){
 
   if(!data)return <div className="loading">Loading TV mode…</div>;
 
+  const {draft,teams,players,picks}=data;
+  const currentTeam=snakeTeamAt(teams,draft.current_pick_index);
+  const nextTeam=snakeTeamAt(teams,draft.current_pick_index+1);
+  const currentPick=picks.find(p=>p.id===draft.reveal_pick_id);
+
   return (
     <div className="tv">
-      <RevealOverlay
-        mode={data.draft.reveal_pick_id?'reveal':'pick'}
-        pick={data.picks.find(p=>p.id===data.draft.reveal_pick_id)}
-        players={data.players}
-        teams={data.teams}
-      />
-      <Timer draft={data.draft}/>
+      <div className="tv-top">
+        <div className="tv-label">CURRENTLY ON THE CLOCK</div>
+        <div className="tv-team">{currentTeam?.name || '—'}</div>
+      </div>
+
+      <div className="tv-clock">
+        <Timer draft={draft}/>
+      </div>
+
+      {draft.reveal_pick_id ? (
+        <RevealOverlay
+          mode="reveal"
+          pick={currentPick}
+          players={players}
+          teams={teams}
+        />
+      ) : (
+        <div className="tv-center">
+          <h1>RevealDraft</h1>
+          <p>Waiting for next pick...</p>
+        </div>
+      )}
+
+      <div className="tv-ontheclock">
+        <div className="tv-otc-label">
+          ON THE CLOCK
+        </div>
+      
+        <div className="tv-otc-team">
+          {currentTeam?.name || '—'}
+        </div>
+      </div>
+
+      <div className="tv-bottom">
+        <div className="tv-label">NEXT PICK</div>
+        <div className="tv-next">{nextTeam?.name || '—'}</div>
+      </div>
+    </div>
+  );
+}
+
+function Viewer(){
+  const[code,setCode]=useState(new URLSearchParams(location.search).get('code')||'');
+  const[data,setData]=useState(null);
+
+  async function load(){
+    const{data:d}=await supabase.from('drafts').select('*').eq('tv_code',code).single();
+
+    if(d){
+      const[teams,players,picks]=await Promise.all([
+        supabase.from('teams').select('*').eq('draft_id',d.id).order('draft_order'),
+        supabase.from('players').select('*').eq('draft_id',d.id),
+        supabase.from('picks').select('*').eq('draft_id',d.id).order('pick_number')
+      ]);
+
+      setData({
+        draft:d,
+        teams:teams.data||[],
+        players:players.data||[],
+        picks:picks.data||[]
+      });
+    }
+  }
+
+  useEffect(()=>{
+    if(code){
+      load();
+      const ch=supabase
+        .channel('viewer-'+code)
+        .on('postgres_changes',{event:'*',schema:'public'},load)
+        .subscribe();
+
+      return()=>supabase.removeChannel(ch);
+    }
+  },[code]);
+
+  if(!code){
+    return (
+      <div className="login">
+        <img src={logo}/>
+        <h1>RevealDraft Viewer</h1>
+        <input placeholder="Viewer code" onChange={e=>setCode(e.target.value)}/>
+      </div>
+    );
+  }
+
+  if(!data)return <div className="loading">Loading viewer mode…</div>;
+
+  const {draft,teams,players,picks}=data;
+  const currentTeam=snakeTeamAt(teams,draft.current_pick_index);
+
+  return (
+    <div className="draft">
+      <div className="scorebar">
+        <h1>{draft.name}</h1>
+        <div><b>On the clock:</b> {currentTeam?.name||'—'}</div>
+        <Timer draft={draft}/>
+        <div className="phase">Phase: {draft.current_phase}</div>
+      </div>
+
+      <div className="rosters">
+        {teams.map(t=>(
+          <div className="panel" key={t.id}>
+            <h2>
+              {t.logo_url&&<img className="teamlogo" src={t.logo_url}/>}
+              {t.name}
+            </h2>
+            <PlayerNames players={players.filter(p=>p.drafted_team_id===t.id||p.assigned_team_id===t.id)}/>
+          </div>
+        ))}
+      </div>
+
+      <div className="panel">
+        <h2>Pick-by-Pick</h2>
+        <PickList picks={picks} players={players} teams={teams}/>
+      </div>
     </div>
   );
 }

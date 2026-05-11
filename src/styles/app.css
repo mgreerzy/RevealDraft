@@ -86,3 +86,165 @@
   font-weight: bold;
   cursor: pointer;
 }
+
+.tv {
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #123b79, #061225 55%, #020817);
+  color: white;
+  position: relative;
+  overflow: hidden;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+
+
+.tv-label {
+  font-size: 22px;
+  letter-spacing: 3px;
+  color: #b8d5ff;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tv-team {
+  font-size: 72px;
+  font-weight: 900;
+  text-transform: uppercase;
+  margin-top: 8px;
+}
+
+.tv-next {
+  font-size: 48px;
+  font-weight: 900;
+  text-transform: uppercase;
+  margin-top: 8px;
+}
+
+.tv-clock {
+  position: absolute;
+  top: 150px;
+  right: 48px;
+  z-index: 30;
+  transform: scale(1.8);
+}
+
+.tv-center {
+  text-align: center;
+  margin: auto;
+  z-index: 10;
+}
+
+.tv-center h1 {
+  font-size: 96px;
+  margin: 0;
+}
+
+.tv-center p {
+  font-size: 28px;
+  color: #b8d5ff;
+}
+
+.tv-ontheclock,
+.tv-bottom {
+  position: absolute;
+  bottom: 40px;
+  z-index: 40;
+  width: 300px;
+  min-height: 110px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  padding: 20px 28px;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.tv-ontheclock {
+  left: 40px;
+  text-align: left;
+}
+
+.tv-bottom {
+  right: 40px;
+  text-align: right;
+}
+
+.tv-otc-label,
+.tv-label {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #9cc7ff;
+  text-transform: uppercase;
+}
+
+.tv-otc-team,
+.tv-next {
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
+  margin-top: 8px;
+  text-transform: uppercase;
+  color: white;
+}
+
+.tv-otc-label {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #9cc7ff;
+  text-transform: uppercase;
+}
+
+.tv-otc-team {
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+.reveal-bottom-left,
+.reveal-bottom-right {
+  position: absolute;
+  bottom: 40px;
+  z-index: 80;
+  width: 300px;
+  min-height: 110px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  padding: 20px 28px;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.reveal-bottom-left {
+  left: 40px;
+  text-align: left;
+}
+
+.reveal-bottom-right {
+  right: 40px;
+  text-align: right;
+}
+
+.reveal-lower-label {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #9cc7ff;
+  text-transform: uppercase;
+}
+
+.reveal-lower-team {
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
+  margin-top: 8px;
+  text-transform: uppercase;
+  color: white;
+}
