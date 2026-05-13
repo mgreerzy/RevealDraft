@@ -222,6 +222,31 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
+.admin-player-card{
+  border-bottom:1px solid rgba(255,255,255,.15);
+  padding:20px 0;
+  margin-bottom:20px;
+}
+
+.admin-player-card input,
+.admin-player-card select{
+  margin-bottom:10px;
+}
+
+.player-number-header{
+  margin:0 0 12px 0;
+  font-size:22px;
+  font-weight:800;
+  color:#3b82f6;
+}
+
+.player-number-header{
+  margin:0 0 10px 0;
+  font-size:20px;
+  font-weight:800;
+  color:#2563eb;
+}
+
 .reveal-bottom-left {
   left: 40px;
   text-align: left;
@@ -230,6 +255,12 @@
 .reveal-bottom-right {
   right: 40px;
   text-align: right;
+}
+
+.readonly-input{
+  background:#f3f4f6;
+  color:#666;
+  cursor:not-allowed;
 }
 
 .reveal-lower-label {

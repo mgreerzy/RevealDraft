@@ -44,6 +44,18 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
   const [keeperPhase, setKeeperPhase] = useState("any");
   const [keeperIsCoach, setKeeperIsCoach] = useState(false);
 
+  const [positionConstraints, setPositionConstraints] = useState([]);
+  const [constraintPosition, setConstraintPosition] = useState("");
+  const [constraintMin, setConstraintMin] = useState("");
+  const [constraintMax, setConstraintMax] = useState("");
+
+  const [salaryCapType, setSalaryCapType] = useState("none");
+  const [salaryCapAmount, setSalaryCapAmount] = useState("");
+
+  const [salaryValue, setSalaryValue] = useState("");
+
+  const [playerIsCoach, setPlayerIsCoach] = useState("no");
+
   useEffect(() => {
     loadDrafts();
     loadProfiles();
@@ -54,8 +66,44 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
     if (selectedDraft?.id) {
       loadTeams();
       loadPlayers();
+      loadPositionConstraints();
     }
   }, [selectedDraft]);
+
+async function savePositionConstraint() {
+  if (!selectedDraft) return alert("Select a draft first");
+  if (!constraintPosition) return alert("Position is required");
+
+  const { error } = await supabase
+    .from("draft_position_constraints")
+    .upsert({
+      draft_id: selectedDraft.id,
+      position: constraintPosition.trim().toUpperCase(),
+      min_count: constraintMin === "" ? null : Number(constraintMin),
+      max_count: constraintMax === "" ? null : Number(constraintMax),
+    });
+
+  if (error) return alert(error.message);
+
+  setConstraintPosition("");
+  setConstraintMin("");
+  setConstraintMax("");
+
+  await loadPositionConstraints();
+
+  alert("Position constraint saved");
+}
+
+async function removePositionConstraint(id) {
+  const { error } = await supabase
+    .from("draft_position_constraints")
+    .delete()
+    .eq("id", id);
+
+  if (error) return alert(error.message);
+
+  await loadPositionConstraints();
+}
 
 async function assignKeeperPlayer() {
   if (!keeperPlayerId || !keeperTeamId || !keeperRound) {
@@ -161,6 +209,20 @@ async function loadCommissionerAccess() {
   setAccessRows(data || []);
 }
 
+async function loadPositionConstraints() {
+  if (!selectedDraft?.id) return;
+
+  const { data, error } = await supabase
+    .from("draft_position_constraints")
+    .select("*")
+    .eq("draft_id", selectedDraft.id)
+    .order("position");
+
+  if (error) return alert(error.message);
+
+  setPositionConstraints(data || []);
+}
+
 async function grantCommissionerAccess() {
   if (!accessDraftId || !accessUserId) {
     return alert("Select a draft and commissioner");
@@ -245,7 +307,10 @@ async function removeCommissionerAccess(id) {
           : "male_first"
       );
     }
-
+    setSalaryCapType(
+      draft.salary_cap_enabled ? "salary_cap" : "none"
+    );
+    setSalaryCapAmount(draft.salary_cap_amount || "");
     setPickSeconds(draft.pick_seconds || 90);
     setStatus(draft.status || "setup");
   }
@@ -306,6 +371,11 @@ async function removeCommissionerAccess(id) {
         pick_seconds: Number(pickSeconds),
         status,
         current_pick_index: 0,
+	salary_cap_enabled: salaryCapType === "salary_cap",
+	salary_cap_amount:
+	  salaryCapType === "salary_cap"
+	    ? Number(salaryCapAmount || 0)
+	    : null,
       })
       .select()
       .single();
@@ -317,6 +387,17 @@ async function removeCommissionerAccess(id) {
     await loadDrafts();
 
     alert("Draft created");
+  }
+
+  async function updatePlayer(playerId, fields) {
+    const { error } = await supabase
+      .from("players")
+      .update(fields)
+      .eq("id", playerId);
+
+    if (error) return alert(error.message);
+  
+    await loadPlayers();
   }
 
   async function updateDraft() {
@@ -338,6 +419,11 @@ async function removeCommissionerAccess(id) {
         phase_order: phaseArray,
         pick_seconds: Number(pickSeconds),
         status,
+	salary_cap_enabled: salaryCapType === "salary_cap",
+	salary_cap_amount:
+	  salaryCapType === "salary_cap"
+	    ? Number(salaryCapAmount || 0)
+	    : null,
       })
       .eq("id", selectedDraft.id);
 
@@ -564,6 +650,7 @@ async function resetDraftProgressOnly() {
           secondaryPosition,
         random_number: nextNumber,
         is_coach: false,
+	salary_value: salaryValue === "" ? null : Number(salaryValue),
       });
 
     if (error) return alert(error.message);
@@ -571,6 +658,7 @@ async function resetDraftProgressOnly() {
     setPlayerName("");
     setPrimaryPosition("");
     setSecondaryPosition("");
+    setSalaryValue("");
 
     await loadPlayers();
   }
@@ -708,6 +796,10 @@ function openLink(path) {
         <button onClick={() => setActiveTab("settings")}>
           Draft Settings
         </button>
+
+	<button onClick={() => setActiveTab("constraints")}>
+	  Position Constraints
+	</button>
 
         <button onClick={() => setActiveTab("teams")}>
           Teams
@@ -869,7 +961,7 @@ function openLink(path) {
           const team = teams.find((t) => t.id === p.assigned_team_id);
 
           return (
-            <div key={p.id} className="admin-row">
+            <div key={p.id} className="admin-player-card">
               <span>
                 {p.name} → {team?.name || "Unknown Team"} — Round {p.keeper_round || 1}
                 {p.is_coach ? " — Coach" : ""}
@@ -881,6 +973,58 @@ function openLink(path) {
             </div>
           );
         })
+    )}
+  </section>
+)}
+
+{activeTab === "constraints" && (
+  <section className="admin-card">
+    <h2>Position Constraints</h2>
+
+    <p>
+      Leave min or max blank for no limit. Example: SS min 1, max 3.
+    </p>
+
+    <input
+      placeholder="Position, example: SS"
+      value={constraintPosition}
+      onChange={(e) => setConstraintPosition(e.target.value)}
+    />
+
+    <input
+      type="number"
+      placeholder="Minimum"
+      value={constraintMin}
+      onChange={(e) => setConstraintMin(e.target.value)}
+    />
+
+    <input
+      type="number"
+      placeholder="Maximum"
+      value={constraintMax}
+      onChange={(e) => setConstraintMax(e.target.value)}
+    />
+
+    <button onClick={savePositionConstraint}>
+      Save Constraint
+    </button>
+
+    <h3>Current Constraints</h3>
+
+    {positionConstraints.length === 0 ? (
+      <p>No position constraints have been added. This draft has no position limits.</p>
+    ) : (
+      positionConstraints.map((c) => (
+        <div key={c.id} className="admin-row">
+          <span>
+            {c.position}: Min {c.min_count ?? "None"} / Max {c.max_count ?? "None"}
+          </span>
+
+          <button onClick={() => removePositionConstraint(c.id)}>
+            Remove
+          </button>
+        </div>
+      ))
     )}
   </section>
 )}
@@ -1004,6 +1148,25 @@ function openLink(path) {
               <option value="paused">Paused</option>
               <option value="complete">Complete</option>
             </select>
+	     
+	      <label>Salary Cap Type</label>
+
+	      <select
+	        value={salaryCapType}
+	        onChange={(e) => setSalaryCapType(e.target.value)}
+	      >
+	        <option value="none">No Salary Cap</option>
+	        <option value="salary_cap">Salary Cap</option>
+	      </select>
+
+	      {salaryCapType === "salary_cap" && (
+	        <input
+	          type="number"
+	          placeholder="Salary cap amount"
+	          value={salaryCapAmount}
+	          onChange={(e) => setSalaryCapAmount(e.target.value)}
+	        />
+	      )}
 
             <div className="admin-actions">
               <button onClick={createDraft}>
@@ -1141,23 +1304,100 @@ teams.map((t) => (
               onChange={(e) =>
                 setPlayerName(e.target.value)
               }
-            />
+	    />
+
+	  <select
+	    value={playerIsCoach}
+	    onChange={(e) => setPlayerIsCoach(e.target.value)}
+	  >
+	    <option value="no">Not Coach</option>
+	    <option value="yes">Coach</option>
+	  </select>
+
+	    <input
+	      type="number"
+	      placeholder="Salary Value"
+	      value={salaryValue}
+	      onChange={(e) => setSalaryValue(e.target.value)}
+	    />
 
             <button onClick={addPlayer}>
               Add Player
             </button>
 
             {players.length === 0 ? (
-              <p>No players entered.</p>
-            ) : (
-              players.map((p) => (
-                <div key={p.id}>
-                  #{p.random_number} - {p.name}
-                </div>
-              ))
-            )}
-          </section>
-        )}
+	      <p>No players entered.</p>
+	    ) : (
+	      players.map((p) => (
+	        <div key={p.id} className="admin-player-card">
+	          
+		  <h3 className="player-number-header">
+		    #{p.random_number}
+		  </h3>
+
+		  <input
+	            defaultValue={p.name || ""}
+	            placeholder="Name"
+	            onBlur={(e) => updatePlayer(p.id, { name: e.target.value })}
+	          />
+
+	          <select
+	            defaultValue={p.gender || "any"}
+	            onChange={(e) => updatePlayer(p.id, { gender: e.target.value })}
+	          >
+	            <option value="any">Any</option>
+	            <option value="female">Female</option>
+	            <option value="male">Male</option>
+	          </select>
+	    
+	          <input
+	            defaultValue={p.primary_position || ""}
+	            placeholder="Primary"
+	            onBlur={(e) =>
+	              updatePlayer(p.id, {
+	                primary_position: e.target.value.toUpperCase(),
+	              })
+	            }
+	          />
+
+	          <input
+	            defaultValue={p.secondary_position || ""}
+	            placeholder="Secondary"
+	            onBlur={(e) =>
+	              updatePlayer(p.id, {
+	                secondary_position: e.target.value.toUpperCase(),
+	              })
+	            }
+	          />
+
+	          <input
+	            defaultValue={p.salary_value || ""}
+	            type="number"
+	            placeholder="Salary"
+	            onBlur={(e) =>
+	              updatePlayer(p.id, {
+	                salary_value: e.target.value === "" ? null : Number(e.target.value),
+	              })
+	            }
+	          />
+
+	          <select
+		    defaultValue={p.is_coach ? "yes" : "no"}
+		    onChange={(e) =>
+		      updatePlayer(p.id, {
+		        is_coach: e.target.value === "yes",
+		      })
+		    }
+		  >
+		    <option value="no">Not Coach</option>
+		    <option value="yes">Coach</option>
+		  </select>
+
+	        </div>
+	      ))
+	    )}
+	  </section>
+	)}
 
         {activeTab === "users" && (
           <section className="admin-card">

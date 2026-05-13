@@ -156,20 +156,22 @@ async function loadAvailableDrafts() {
   },[draftId]);
 
   async function load(){
-    const[d,t,p,pk,q]=await Promise.all([
-      supabase.from('drafts').select('*').eq('id',draftId).single(),
-      supabase.from('teams').select('*').eq('draft_id',draftId),
-      supabase.from('players').select('*').eq('draft_id',draftId),
-      supabase.from('picks').select('*').eq('draft_id',draftId).order('pick_number'),
-      supabase.from('queues').select('*').eq('draft_id',draftId).order('rank')
-    ]);
+	const[d,t,p,pk,q,c]=await Promise.all([
+	  supabase.from('drafts').select('*').eq('id',draftId).single(),
+	  supabase.from('teams').select('*').eq('draft_id',draftId),
+	  supabase.from('players').select('*').eq('draft_id',draftId),
+	  supabase.from('picks').select('*').eq('draft_id',draftId).order('pick_number'),
+	  supabase.from('queues').select('*').eq('draft_id',draftId).order('rank'),
+	  supabase.from('draft_position_constraints').select('*').eq('draft_id',draftId)
+	]);
 
     setData({
       draft:d.data,
       teams:t.data||[],
       players:p.data||[],
       picks:pk.data||[],
-      queues:q.data||[]
+      queues:q.data||[],
+      constraints:c.data||[],
     });
   }
 
@@ -204,7 +206,10 @@ if (
     return (
       <AdminDashboard
         profile={profile}
-        onSwitchToDraft={() => setViewMode("draft")}
+        onSwitchToDraft={async () => {
+	  setViewMode("draft");
+	  await loadAvailableDrafts();
+	}}
       />
     );
   }
@@ -217,12 +222,23 @@ if (
           <span>RevealDraft</span>
         </div>
 
-        <select value={draftId} onChange={e=>{
-          setDraftId(e.target.value);
-          localStorage.draftId=e.target.value;
-        }}>
-          {drafts.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
+	<select
+	  value={draftId || ""}
+	  onChange={(e) => {
+	    setDraftId(e.target.value);
+	    localStorage.draftId = e.target.value;
+	  }}
+	>
+	  {drafts.map((d) => (
+	    <option key={d.id} value={d.id}>
+	      {d.name}
+	    </option>
+	  ))}
+	</select>
+
+	<button onClick={loadAvailableDrafts}>
+	  Refresh Drafts
+	</button>
 
         <span className="pill">{profile.role}</span>
         <button onClick={()=>supabase.auth.signOut()}>Sign Out</button>
@@ -261,7 +277,8 @@ function Admin({drafts,reload}){
 }
 
 function DraftRoom({data,profile,isComm,reload}){
-  const{draft,teams,players,picks,queues}=data;
+  const{draft,teams,players,picks,queues,constraints=[]}=data;
+console.log("DRAFT DATA:", draft);
   const myTeam=teams.find(t=>t.coach_user_id===profile.id);
   const currentTeam=snakeTeamAt(teams,draft.current_pick_index);
   const currentRound = roundFor(teams, draft.current_pick_index);
@@ -276,6 +293,147 @@ function DraftRoom({data,profile,isComm,reload}){
   const canPick=(isComm||currentTeam?.id===myTeam?.id)&&draft.status==='live';
   const[tab,setTab]=useState('available');
   const[flash,setFlash]=useState(null);
+
+function wouldExceedPositionMax(player, team) {
+  if (!constraints.length) return false;
+
+  const roster = players.filter(
+    (p) => p.drafted_team_id === team.id || p.assigned_team_id === team.id
+  );
+
+  const activeMaxConstraints = constraints.filter(
+    (c) => c.max_count !== null && c.max_count !== undefined && c.max_count !== ""
+  );
+
+  if (!activeMaxConstraints.length) return false;
+
+  const hasAnyPositionAvailable = activeMaxConstraints.some((c) => {
+    const pos = c.position?.toUpperCase();
+
+    const currentCount = roster.filter((p) => {
+      return (
+        p.primary_position?.toUpperCase() === pos ||
+        p.secondary_position?.toUpperCase() === pos
+      );
+    }).length;
+
+    return currentCount < Number(c.max_count);
+  });
+
+  if (!hasAnyPositionAvailable) {
+    return false;
+  }
+
+  if (wouldExceedSalaryCap(player, team)) {
+    return;
+  }
+
+  const positionsToCheck = [
+    player.primary_position,
+    player.secondary_position,
+  ]
+    .filter(Boolean)
+    .map((x) => x.toUpperCase());
+
+  for (const pos of positionsToCheck) {
+    const constraint = activeMaxConstraints.find(
+      (c) => c.position?.toUpperCase() === pos
+    );
+
+    if (!constraint) continue;
+
+    const currentCount = roster.filter((p) => {
+      return (
+        p.primary_position?.toUpperCase() === pos ||
+        p.secondary_position?.toUpperCase() === pos
+      );
+    }).length;
+
+    if (currentCount + 1 > Number(constraint.max_count)) {
+      alert(
+        `Cannot draft this player yet. ${team.name} has reached the max of ${constraint.max_count} for ${pos}.`
+      );
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function wouldExceedSalaryCap(player, team) {
+  if (!draft.salary_cap_enabled) return false;
+
+  const cap = Number(draft.salary_cap_amount || 0);
+  const playerSalary = Number(player.salary_value || 0);
+
+  const roster = players.filter(
+    (p) => p.drafted_team_id === team.id || p.assigned_team_id === team.id
+  );
+
+  const currentTotal = roster.reduce(
+    (sum, p) => sum + Number(p.salary_value || 0),
+    0
+  );
+
+  const newTotal = currentTotal + playerSalary;
+
+  if (newTotal > cap) {
+    alert(
+      `${team.name} cannot draft ${player.name}. This would exceed the salary cap.\n\nCurrent: ${currentTotal}\nPlayer: ${playerSalary}\nCap: ${cap}`
+    );
+    return true;
+  }
+
+  return false;
+}
+
+function violatesPositionMinimum(player, team) {
+  if (!constraints.length) return false;
+
+  const roster = players.filter(
+    (p) => p.drafted_team_id === team.id || p.assigned_team_id === team.id
+  );
+
+  const activeMinConstraints = constraints.filter(
+    (c) => c.min_count !== null && c.min_count !== undefined && c.min_count !== ""
+  );
+
+  if (!activeMinConstraints.length) return false;
+
+  const neededPositions = activeMinConstraints
+    .filter((c) => {
+      const pos = c.position?.toUpperCase();
+
+      const currentCount = roster.filter((p) => {
+        return (
+          p.primary_position?.toUpperCase() === pos ||
+          p.secondary_position?.toUpperCase() === pos
+        );
+      }).length;
+
+      return currentCount < Number(c.min_count);
+    })
+    .map((c) => c.position?.toUpperCase());
+
+  if (neededPositions.length === 0) return false;
+
+  const playerPositions = [player.primary_position, player.secondary_position]
+    .filter(Boolean)
+    .map((x) => x.toUpperCase());
+
+  const fillsNeededPosition = playerPositions.some((pos) =>
+    neededPositions.includes(pos)
+  );
+
+  if (!fillsNeededPosition) {
+    alert(
+      `${team.name} must first draft a player who can fill: ${neededPositions.join(", ")}.`
+    );
+    return true;
+  }
+
+  return false;
+}
 
   useEffect(()=>{
     if(draft.reveal_pick_id){
@@ -310,7 +468,11 @@ useEffect(() => {
   });
 
   if (autoPlayer) {
-    makePick(autoPlayer, currentTeam);
+    const timer = setTimeout(() => {
+  	makePick(autoPlayer, currentTeam);
+    }, 15000);
+
+return () => clearTimeout(timer);
   }
 }, [
   draft.current_pick_index,
@@ -324,6 +486,18 @@ useEffect(() => {
 async function makePick(player, team = currentTeam) {
   if (!team || !player) {
     return alert("Missing team or player.");
+  }
+
+  if (violatesPositionMinimum(player, team)) {
+    return;
+  }
+
+  if (wouldExceedPositionMax(player, team)) {
+    return;
+  }
+
+  if (wouldExceedSalaryCap(player, team)) {
+    return;
   }
 
   const { error } = await supabase.rpc("make_draft_pick", {
@@ -454,7 +628,16 @@ async function makePick(player, team = currentTeam) {
           .map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}
       </nav>
 
-      {tab==='available'&&<PlayerGrid players={available} makePick={makePick} canPick={canPick} addQueue={addQueue}/>}
+      {tab==='available'&&(
+	  <PlayerGrid
+	    players={available}
+	    makePick={makePick}
+	    canPick={canPick}
+	    addQueue={addQueue}
+	    salaryCapEnabled={!!draft?.salary_cap_enabled}
+	  />
+      )}
+
       {tab==='picks'&&<PickList picks={picks} players={players} teams={teams}/>}
       {tab==='roster'&&<Roster team={myTeam} players={players}/>}
       {tab==='positions'&&<PositionCounts team={myTeam} players={players}/>}
@@ -538,18 +721,31 @@ function Timer({draft}){
   return <div className={'timer '+(left<15?'danger':'')}><Clock size={20}/>{left}</div>;
 }
 
-function PlayerGrid({players,makePick,canPick,addQueue}){
+function PlayerGrid({players,makePick,canPick,addQueue,salaryCapEnabled}){
   return (
-    <div className="grid">
-      {players.sort((a,b)=>a.random_number-b.random_number).map(p=>
-        <div className="card" key={p.id}>
-          <h2>#{p.random_number}</h2>
-          <p>{p.primary_position} / {p.secondary_position}</p>
-          <small>{p.gender}</small>
-          <button disabled={!canPick} onClick={()=>makePick(p)}>Draft</button>
-          <button onClick={()=>addQueue(p)}>Queue</button>
-        </div>
-      )}
+
+      <div className="grid">
+        {players.sort((a,b)=>a.random_number-b.random_number).map(p=>(
+          <div className="card" key={p.id}>
+            <h2>#{p.random_number}</h2>
+            <p>{p.primary_position} / {p.secondary_position}</p>
+            <small>{p.gender}</small>
+
+            {salaryCapEnabled && (
+		<p className="salary-text">
+		Salary: {p.salary_value ?? 0}
+		</p>
+	    )}
+
+            <button disabled={!canPick} onClick={()=>makePick(p)}>
+              Draft
+            </button>
+
+            <button onClick={()=>addQueue(p)}>
+              Queue
+            </button>
+          </div>
+        ))}
     </div>
   );
 }
@@ -740,11 +936,13 @@ function CommissionerTools({draft,teams,players,makePick}){
       </select>
 
       <PlayerGrid
-        players={players.filter(p=>!p.drafted_team_id&&!p.is_coach)}
-        canPick={!!team}
-        makePick={p=>makePick(p,teams.find(t=>t.id===team))}
-        addQueue={()=>{}}
+	  players={available}
+	  makePick={makePick}
+	  canPick={canPick}
+	  addQueue={addQueue}
+	  salaryCapEnabled={!!draft?.salary_cap_enabled}
       />
+
     </div>
   );
 }
@@ -779,7 +977,7 @@ function RevealOverlay({mode,pick,players,teams,currentTeam,nextTeam}){
 
 function TV(){
   const[code,setCode]=useState(new URLSearchParams(location.search).get('code')||'');
-  const[data,setData]=useState(null);
+  const[data,setData]=useState({draft:null,teams:[],players:[],picks:[],queues:[],constraints:[]});
 
   async function load(){
     const{data:d}=await supabase.from('drafts').select('*').eq('tv_code',code).single();
@@ -792,7 +990,7 @@ function TV(){
       ]);
 
       setData({
-        draft:d,
+        draft: d.data,
         teams:teams.data||[],
         players:players.data||[],
         picks:picks.data||[]
@@ -887,7 +1085,7 @@ function Viewer(){
       ]);
 
       setData({
-        draft:d,
+        draft:d.data,
         teams:teams.data||[],
         players:players.data||[],
         picks:picks.data||[]
