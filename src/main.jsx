@@ -676,43 +676,40 @@ await reload();
       </AnimatePresence>
 
       <div className="scorebar">
-        <h1>{draft.name}</h1>
-        <div className="draft-status">
-  	  <div className="clock-team">
-  	      <span className="label">On the clock:</span>
-  	      <span className="team-name">{currentTeam?.name || '-'}</span>
-  	    </div>
+	  <div className="draft-info-row">
+	    <h1>{draft.name}</h1>
+	
+	    <div><b>On the clock:</b> {currentTeam?.name || '-'}</div>
 
-  	    <Timer draft={draft}/>
+	    <Timer draft={draft}/>
 
-  	    <div className="phase">
-  	      PHASE: {currentPhase?.toUpperCase()}
-  	    </div>
+	    <div className="phase">PHASE: {currentPhase?.toUpperCase()}</div>
 
-  	    {draft?.salary_cap_enabled && (
-  	      <div className="salary-cap-display">
-  	        Salary Cap Remaining: {currentSalaryRemaining}
-  	      </div>
-  	    )}
-  	  </div>
+	    {draft?.salary_cap_enabled && (
+	      <div className="salary-cap-display">
+	        Salary Cap Remaining: {currentSalaryRemaining}
+	      </div>
+	    )}
+	  </div>
 
-        {isComm&&
-          <div className="actions">
-            <button onClick={()=>pause('live')}><Play size={16}/>Start</button>
-            <button onClick={()=>pause('paused')}><Pause size={16}/>Pause</button>
-	    <button onClick={undoLastPick}>Undo Last Pick</button>
-            <button onClick={randomize}><Shuffle size={16}/>Randomize</button>
-            <button onClick={()=>exportDraft(data)}><Download size={16}/>Export XLS</button>
-	    <label className="override-toggle">
-	      <input
-	        type="checkbox"
-	        checked={overrideConstraints}
-	        onChange={(e) => setOverrideConstraints(e.target.checked)}
-	      />
-	      Override salary / position constraints
-	    </label>
-          </div>
-        }
+	  {isComm && (
+	    <div className="admin-action-row">
+	      <button onClick={()=>pause('live')}><Play size={16}/>Start</button>
+	      <button onClick={()=>pause('paused')}><Pause size={16}/>Pause</button>
+	      <button onClick={undoLastPick}>Undo Last Pick</button>
+	      <button onClick={randomize}><Shuffle size={16}/>Randomize</button>
+	      <button onClick={()=>exportDraft(data)}><Download size={16}/>Export XLS</button>
+
+	      <label className="override-toggle">
+	        <input
+	          type="checkbox"
+	          checked={overrideConstraints}
+	          onChange={(e)=>setOverrideConstraints(e.target.checked)}
+	        />
+	        Override salary / position constraints
+	      </label>
+	    </div>
+	  )}
       </div>
 
       <nav className="tabs">
