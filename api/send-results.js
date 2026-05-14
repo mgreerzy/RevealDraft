@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     const { to, subject, html } = req.body;
 
     const response = await resend.emails.send({
-      from: "RevealDraft <draft@mail.revealdraft.com>",
+      from: "RevealDraft <draft@revealdraft.com>",
       to,
       subject,
       html,
