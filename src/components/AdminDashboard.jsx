@@ -58,6 +58,45 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
 
   const [auditLogs, setAuditLogs] = useState([]);
 
+  const [autoPickMode, setAutoPickMode] = useState("disabled");
+
+  const setupChecklist = [
+    {
+      label: "Draft created",
+      done: !!selectedDraft?.id,
+    },
+    {
+      label: "Draft settings saved",
+      done: !!selectedDraft?.type && !!selectedDraft?.pick_seconds,
+    },
+    {
+      label: "Teams added",
+      done: teams.length > 0,
+    },
+    {
+      label: "Players added",
+      done: players.length > 0,
+    },
+    {
+      label: "Coaches assigned to teams",
+      done:
+        teams.length > 0 &&
+        teams.every((t) => !!t.coach_user_id),
+    },
+    {
+      label: "Draft order randomized",
+      done:
+        teams.length > 0 &&
+        teams.every((t) => t.draft_order !== null && t.draft_order !== undefined),
+    },
+    {
+      label: "TV / Viewer links ready",
+      done: !!selectedDraft?.tv_code,
+    },
+  ];
+
+  const setupComplete = setupChecklist.every((item) => item.done);
+
   useEffect(() => {
     loadDrafts();
     loadProfiles();
@@ -393,6 +432,7 @@ async function removeCommissionerAccess(id) {
 	  salaryCapType === "salary_cap"
 	    ? Number(salaryCapAmount || 0)
 	    : null,
+	auto_pick_mode: autoPickMode,
       })
       .select()
       .single();
@@ -865,6 +905,10 @@ async function logAdminAudit(action, details = {}) {
 	  Keepers / Coach Picks
 	</button>
 
+	<button onClick={() => setActiveTab("setupChecklist")}>
+	  Setup Checklist
+	</button>
+
 	<button onClick={() => setActiveTab("commissionerAccess")}>
 	  Commissioner Access
 	</button>
@@ -928,6 +972,49 @@ async function logAdminAudit(action, details = {}) {
 	        <button onClick={() => openLink("/viewer")}>Open Viewer Mode</button>
 	        <button onClick={() => copyLink("/viewer")}>Copy Viewer Link</button>
 	      </>
+	    )}
+	  </section>
+	)}
+
+	{activeTab === "setupChecklist" && (
+	  <section className="admin-card">
+	    <h2>Draft Setup Checklist</h2>
+
+	    <div
+	    className="setup-status"
+	    style={{
+	      background: setupComplete
+	        ? "rgba(34,197,94,0.2)"
+	        : "rgba(239,68,68,0.2)",
+	      color: setupComplete
+	        ? "#22c55e"
+	        : "#ef4444",
+	      border: `1px solid ${
+	        setupComplete ? "#22c55e" : "#ef4444"
+	      }`,
+	    }}
+	  >
+	    {setupComplete
+	      ? "Setup Complete"
+	      : "Setup Incomplete"}
+	  </div>
+
+	    <div className="setup-checklist">
+	      {setupChecklist.map((item) => (
+	        <div
+	          key={item.label}
+	          className={`setup-check-item ${item.done ? "done" : "missing"}`}
+	        >
+	          <span>{item.done ? "✅" : "⬜"}</span>
+	          <strong>{item.label}</strong>
+	        </div>
+	      ))}
+	    </div>
+
+	    {!setupComplete && (
+	      <p className="muted">
+	        Complete all checklist items before starting the draft.
+	      </p>
 	    )}
 	  </section>
 	)}
@@ -1222,6 +1309,18 @@ async function logAdminAudit(action, details = {}) {
               <option value="complete">Complete</option>
             </select>
 	     
+<label>Auto Pick Mode</label>
+
+<select
+  value={autoPickMode}
+  onChange={(e)=>setAutoPickMode(e.target.value)}
+>
+  <option value="disabled">Disabled</option>
+  <option value="queue_only">Queue Only</option>
+  <option value="queue_random">Queue Then Random</option>
+  <option value="random">Random Eligible Player</option>
+</select>
+
 	      <label>Salary Cap Type</label>
 
 	      <select

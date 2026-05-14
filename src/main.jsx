@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import React,{useEffect,useMemo,useState}from'react';
 import{createRoot}from'react-dom/client';
 import{Clock,Download,Pause,Play,Shuffle,Upload,Volume2}from'lucide-react';
@@ -253,7 +254,7 @@ if (
           <span>RevealDraft</span>
         </div>
 
-	{profile?.role !== "coach" && (
+	{(profile?.role !== "coach" || drafts.length > 1) && (
 	  <select value={draftId} onChange={e=>{
 	    setDraftId(e.target.value);
 	    localStorage.draftId=e.target.value;
@@ -310,10 +311,11 @@ function Admin({drafts,reload}){
 
 function DraftRoom({data,profile,isComm,reload}){
   const{draft,teams,players,picks,queues,constraints=[]}=data;
-console.log("DRAFT DATA:", draft);
+  console.log("DRAFT DATA:", draft);
   const myTeam=teams.find(t=>t.coach_user_id===profile.id);
   const currentTeam=snakeTeamAt(teams,draft.current_pick_index);
   const [overrideConstraints, setOverrideConstraints] = useState(false);
+  const [isPicking, setIsPicking] = useState(false);
   const currentRoster = currentTeam
     ? players.filter(
         (p) =>
@@ -540,49 +542,156 @@ async function logAudit(action, details = {}) {
   });
 }
 
+function exportDraft(data) {
+  const { draft, teams, players, picks } = data;
+  const salaryCapEnabled = !!draft?.salary_cap_enabled;
+
+  const workbook = XLSX.utils.book_new();
+
+  const masterHeader = [
+    "Pick #",
+    "Round",
+    "Team",
+    "Player #",
+    "Player",
+    "Gender",
+    "Primary",
+    "Secondary",
+    ...(salaryCapEnabled ? ["Salary"] : []),
+  ];
+
+  const masterRows = [masterHeader];
+
+  picks
+    .sort((a, b) => a.pick_number - b.pick_number)
+    .forEach((pick) => {
+      const player = players.find((p) => p.id === pick.player_id) || {};
+      const team = teams.find((t) => t.id === pick.team_id) || {};
+
+      masterRows.push([
+        pick.pick_number,
+        pick.round_num || "",
+        team.name || "",
+        player.random_number || "",
+        player.name || "",
+        player.gender || "",
+        player.primary_position || "",
+        player.secondary_position || "",
+        ...(salaryCapEnabled ? [player.salary_value ?? ""] : []),
+      ]);
+    });
+
+  const masterSheet = XLSX.utils.aoa_to_sheet(masterRows);
+  XLSX.utils.book_append_sheet(workbook, masterSheet, "Draft Results");
+
+  teams
+    .sort((a, b) => a.draft_order - b.draft_order)
+    .forEach((team) => {
+      const roster = players
+        .filter(
+          (p) =>
+            p.drafted_team_id === team.id ||
+            p.assigned_team_id === team.id
+        )
+        .sort((a, b) => (a.random_number || 0) - (b.random_number || 0));
+
+      const salaryUsed = roster.reduce(
+        (sum, p) => sum + Number(p.salary_value || 0),
+        0
+      );
+
+      const teamRows = [];
+
+      teamRows.push([team.name || "Unnamed Team"]);
+
+      if (salaryCapEnabled) {
+        teamRows.push(["Salary Used", salaryUsed]);
+        teamRows.push([
+          "Salary Remaining",
+          Number(draft?.salary_cap_amount || 0) - salaryUsed,
+        ]);
+      }
+
+      teamRows.push([]);
+      teamRows.push([
+        "Player #",
+        "Player",
+        "Gender",
+        "Primary",
+        "Secondary",
+        ...(salaryCapEnabled ? ["Salary"] : []),
+      ]);
+
+      roster.forEach((player) => {
+        teamRows.push([
+          player.random_number || "",
+          player.name || "",
+          player.gender || "",
+          player.primary_position || "",
+          player.secondary_position || "",
+          ...(salaryCapEnabled ? [player.salary_value ?? ""] : []),
+        ]);
+      });
+
+      const sheet = XLSX.utils.aoa_to_sheet(teamRows);
+
+      const safeSheetName = (team.name || "Team")
+        .replace(/[\\/?*[\]:]/g, "")
+        .slice(0, 31);
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        sheet,
+        safeSheetName || "Team"
+      );
+    });
+
+  const safeFileName = (draft?.name || "draft-results")
+    .replace(/[^a-z0-9]/gi, "-")
+    .toLowerCase();
+
+  XLSX.writeFile(workbook, `${safeFileName}-results.xlsx`);
+}
+
 async function makePick(player, team = currentTeam) {
-  if (!team || !player) {
-    return alert("Missing team or player.");
+  if (isPicking) return;
+
+  setIsPicking(true);
+
+  try {
+    if (!team || !player) {
+      return alert("Missing team or player.");
+    }
+
+    if (!overrideConstraints || !isComm) {
+      if (violatesPositionMinimum(player, team)) return;
+      if (wouldExceedPositionMax(player, team)) return;
+      if (wouldExceedSalaryCap(player, team)) return;
+    }
+
+    const { error } = await supabase.rpc("make_draft_pick", {
+      target_draft_id: draft.id,
+      target_team_id: team.id,
+      target_player_id: player.id,
+      made_by_user_id: profile.id,
+      pick_phase: currentPhase,
+      round_num: roundFor(teams, draft.current_pick_index),
+    });
+
+    if (error) {
+      console.error(error);
+      return alert(error.message);
+    }
+
+    if (overrideConstraints) {
+      setOverrideConstraints(false);
+    }
+
+    playSound("pick");
+    await reload();
+  } finally {
+    setIsPicking(false);
   }
-
-  if (!overrideConstraints || !isComm) {
-    if (violatesPositionMinimum(player, team)) return;
-    if (wouldExceedPositionMax(player, team)) return;
-    if (wouldExceedSalaryCap(player, team)) return;
-  }
-
-  const { error } = await supabase.rpc("make_draft_pick", {
-    target_draft_id: draft.id,
-    target_team_id: team.id,
-    target_player_id: player.id,
-    made_by_user_id: profile.id,
-    pick_phase: currentPhase,
-    round_num: roundFor(teams, draft.current_pick_index),
-  });
-
-  if (error) {
-    console.error(error);
-    return alert(error.message);
-  }
-
-  if (overrideConstraints) {
-    setOverrideConstraints(false);
-  }
-
-  playSound("pick");
-
-  await logAudit("pick_made", {
-    team_id: team.id,
-    team_name: team.name,
-    player_id: player.id,
-    player_name: player.name,
-    random_number: player.random_number,
-    phase: currentPhase,
-    round: roundFor(teams, draft.current_pick_index),
-    override_used: !!overrideConstraints && !!isComm,
-  });
-
-await reload();
 }
 
   function nextDraftState(){
@@ -699,7 +808,7 @@ await reload();
 	      <button onClick={()=>pause('paused')}><Pause size={16}/>Pause</button>
 	      <button onClick={undoLastPick}>Undo Last Pick</button>
 	      <button onClick={randomize}><Shuffle size={16}/>Randomize</button>
-	      <button onClick={()=>exportDraft(data)}><Download size={16}/>Export XLS</button>
+	      <button onClick={()=>exportDraft(data)}><Download size={16}/>Export Results</button>
 
 	      <label className="override-toggle">
 	        <input
@@ -826,7 +935,14 @@ function Timer({draft}){
   return <div className={'timer '+(left<15?'danger':'')}><Clock size={20}/>{left}</div>;
 }
 
-function PlayerGrid({players,makePick,canPick,addQueue,salaryCapEnabled}){
+function PlayerGrid({
+  players,
+  makePick,
+  canPick,
+  addQueue,
+  salaryCapEnabled,
+  isPicking
+}){
   return (
 
       <div className="grid">
@@ -842,9 +958,12 @@ function PlayerGrid({players,makePick,canPick,addQueue,salaryCapEnabled}){
 		</p>
 	    )}
 
-            <button disabled={!canPick} onClick={()=>makePick(p)}>
-              Draft
-            </button>
+            <button
+		  disabled={!canPick || isPicking}
+		  onClick={()=>makePick(p)}
+		>
+		  {isPicking ? "Drafting..." : "Draft"}
+	    </button>
 
             <button onClick={()=>addQueue(p)}>
               Queue
@@ -1074,6 +1193,7 @@ function CommissionerTools({draft,teams,players,available,makePick}){
 	  canPick={!!team}
 	  addQueue={() => {}}
 	  salaryCapEnabled={!!draft?.salary_cap_enabled}
+	  isPicking={isPicking}
 	/>
 
     </div>
