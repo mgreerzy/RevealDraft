@@ -10,11 +10,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const {
-      to,
-      subject,
-      html,
-    } = req.body;
+    const { to, subject, html } = req.body;
 
     const response = await resend.emails.send({
       from: "RevealDraft <draft@mail.revealdraft.com>",
