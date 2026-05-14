@@ -267,9 +267,11 @@ if (
 	  ))}
 	</select>
 
-	<button onClick={loadAvailableDrafts}>
-	  Refresh Drafts
-	</button>
+	{(profile?.role === "admin" || profile?.role === "commissioner") && (
+	  <button onClick={loadAvailableDrafts}>
+	    Refresh Drafts
+	  </button>
+	)}
 
         <span className="pill">{profile.role}</span>
         <button onClick={()=>supabase.auth.signOut()}>Sign Out</button>
