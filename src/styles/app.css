@@ -71,9 +71,7 @@ main{padding:20px;max-width:1400px;margin:auto}
   justify-content:center;
   color:var(--blue)}
 
-.timer
-
-.danger{
+.timer.danger{
   color:var(--red);
   animation:pulse .8s infinite}
 
@@ -107,9 +105,7 @@ main{padding:20px;max-width:1400px;margin:auto}
   border:1px solid #dbe6ff;
   text-transform:capitalize}
 
-.tabs button
-
-.active{
+.tabs button.active{
   background:var(--red);
   color:white}
 
@@ -278,7 +274,7 @@ main{
 }
 
 .draft-info-row h1{
-  width:100%  
+  width:100%;  
   margin:0;
   min-width:220px;
   margin-bottom:6px
@@ -624,20 +620,30 @@ main{
 @media(max-width:700px){
   header{
     position:relative;
-    flex-direction:column;
-    align-items:stretch;
-    gap:10px;
-    padding:12px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    padding:10px;
   }
 
   .brand{
+    grid-column:1 / -1;
     justify-content:center;
-    font-size:22px;
+    font-size:20px;
+  }
+
+  .brand img{
+    width:38px;
+    height:38px;
   }
 
   header select,
-  header button{
+  header button,
+  header .pill{
     width:100%;
+    font-size:13px;
+    padding:10px;
+    text-align:center;
   }
 
   main{
@@ -645,68 +651,82 @@ main{
   }
 
   .scorebar{
-    padding:18px;
-    gap:14px;
+    padding:16px;
+    gap:12px;
   }
 
-  .draft-info-row,
-  .admin-action-row{
-    flex-direction:column;
-    align-items:stretch;
+  .draft-info-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
     gap:10px;
+    align-items:center;
   }
 
   .draft-info-row h1{
+    grid-column:1 / -1;
+    font-size:28px;
     min-width:0;
-    font-size:30px;
   }
 
   .timer{
+    font-size:34px;
     justify-content:flex-start;
-    font-size:38px;
   }
 
+  .phase,
   .salary-cap-display{
-    width:100%;
-    text-align:center;
+    font-size:14px;
+  }
+
+  .admin-action-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+
+  .override-toggle{
+    grid-column:1 / -1;
+    font-size:13px;
   }
 
   .tabs{
     gap:6px;
-    padding-bottom:6px;
-  }
-
-  @media(max-width:480px){
-    .grid{
-      grid-template-columns:1fr;
-    }
+    overflow-x:auto;
+    padding-bottom:8px;
   }
 
   .tabs button{
-    min-width:100px;
-    padding:12px 14px;
-    font-size:14px;
+    min-width:96px;
+    padding:12px 10px;
+    font-size:13px;
   }
 
   .grid{
-    grid-template-columns:repeat(2, minmax(0,1fr));
+    grid-template-columns:repeat(2,minmax(0,1fr));
     gap:12px;
   }
 
   .card{
-    padding:20px;
+    padding:16px;
+    border-radius:18px;
   }
 
   .card h2{
-    font-size:46px;
+    font-size:38px;
   }
 
   .card button{
-    padding:16px;
-    font-size:16px;
+    padding:14px;
+    font-size:14px;
+  }
+}
+
+@media(max-width:480px){
+  .grid{
+    grid-template-columns:1fr;
   }
 
-  .rosters{
+  .admin-action-row{
     grid-template-columns:1fr;
   }
 }
