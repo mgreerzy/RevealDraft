@@ -111,6 +111,12 @@ async function loadAvailableDrafts() {
       return;
     }
 
+    if (profile?.role === "coach") {
+      const { data: coachTeams, error: teamError } = await supabase
+        .from("teams")
+        .select("draft_id")
+        .eq("coach_user_id", profile.id);
+
     const { data, error } = await supabase
       .from("drafts")
       .select("*")
@@ -202,7 +208,7 @@ if (
   );
 }
 
-  if (isAdmin && viewMode === "admin") {
+  if (isComm && viewMode === "admin") {
     return (
       <AdminDashboard
         profile={profile}
@@ -718,7 +724,15 @@ await reload();
           draft={draft}
         />
       )}
-      {tab==='commissioner'&&<CommissionerTools draft={draft} teams={teams} players={players} makePick={makePick}/>}
+      {tab==='commissioner'&&(
+	  <CommissionerTools
+	    draft={draft}
+	    teams={teams}
+	    players={players}
+	    available={available}
+	    makePick={makePick}
+	  />
+      )}
     </section>
   );
 }
@@ -963,7 +977,7 @@ function Queue({ queues, team, players, makePick, canPick, reload }) {
   );
 }
 
-function CommissionerTools({draft,teams,players,makePick}){
+function CommissionerTools({draft,teams,players,available,makePick}){
   const[team,setTeam]=useState('');
   const[fileType,setFileType]=useState('players');
 
