@@ -270,6 +270,7 @@ main{
 }
 
 .draft-info-row{
+  gap:14px;
   display:flex;
   align-items:center;
   gap:28px;
@@ -277,8 +278,10 @@ main{
 }
 
 .draft-info-row h1{
+  width:100%  
   margin:0;
   min-width:220px;
+  margin-bottom:6px
 }
 
 .admin-action-row{
@@ -555,7 +558,10 @@ main{
   gap:6px;
 }
 
-.draft-info-row .timer{
+.draft-info-row 
+
+.timer{
+  font-size:34px;
   justify-content:flex-start;
 }
 
@@ -670,15 +676,21 @@ main{
     padding-bottom:6px;
   }
 
+  @media(max-width:480px){
+    .grid{
+      grid-template-columns:1fr;
+    }
+  }
+
   .tabs button{
-    min-width:120px;
-    padding:14px 16px;
-    font-size:15px;
+    min-width:100px;
+    padding:12px 14px;
+    font-size:14px;
   }
 
   .grid{
-    grid-template-columns:1fr;
-    gap:16px;
+    grid-template-columns:repeat(2, minmax(0,1fr));
+    gap:12px;
   }
 
   .card{
