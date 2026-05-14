@@ -281,6 +281,22 @@ function DraftRoom({data,profile,isComm,reload}){
 console.log("DRAFT DATA:", draft);
   const myTeam=teams.find(t=>t.coach_user_id===profile.id);
   const currentTeam=snakeTeamAt(teams,draft.current_pick_index);
+  const [overrideConstraints, setOverrideConstraints] = useState(false);
+  const currentRoster = currentTeam
+    ? players.filter(
+        (p) =>
+          p.drafted_team_id === currentTeam.id ||
+          p.assigned_team_id === currentTeam.id
+      )
+    : [];
+
+  const currentSalaryUsed = currentRoster.reduce(
+    (sum, p) => sum + Number(p.salary_value || 0),
+    0
+  );
+
+  const currentSalaryRemaining =
+    Number(draft.salary_cap_amount || 0) - currentSalaryUsed;
   const currentRound = roundFor(teams, draft.current_pick_index);
   const currentPhase=draft.type==='coed'?draft.current_phase:'any';
   const available=players.filter(
@@ -483,21 +499,24 @@ return () => clearTimeout(timer);
   players.length,
 ]);
 
+async function logAudit(action, details = {}) {
+  await supabase.from("audit_logs").insert({
+    draft_id: draft.id,
+    user_id: profile.id,
+    action,
+    details,
+  });
+}
+
 async function makePick(player, team = currentTeam) {
   if (!team || !player) {
     return alert("Missing team or player.");
   }
 
-  if (violatesPositionMinimum(player, team)) {
-    return;
-  }
-
-  if (wouldExceedPositionMax(player, team)) {
-    return;
-  }
-
-  if (wouldExceedSalaryCap(player, team)) {
-    return;
+  if (!overrideConstraints || !isComm) {
+    if (violatesPositionMinimum(player, team)) return;
+    if (wouldExceedPositionMax(player, team)) return;
+    if (wouldExceedSalaryCap(player, team)) return;
   }
 
   const { error } = await supabase.rpc("make_draft_pick", {
@@ -514,8 +533,24 @@ async function makePick(player, team = currentTeam) {
     return alert(error.message);
   }
 
+  if (overrideConstraints) {
+    setOverrideConstraints(false);
+  }
+
   playSound("pick");
-  await reload();
+
+  await logAudit("pick_made", {
+    team_id: team.id,
+    team_name: team.name,
+    player_id: player.id,
+    player_name: player.name,
+    random_number: player.random_number,
+    phase: currentPhase,
+    round: roundFor(teams, draft.current_pick_index),
+    override_used: !!overrideConstraints && !!isComm,
+  });
+
+await reload();
 }
 
   function nextDraftState(){
@@ -553,6 +588,10 @@ async function makePick(player, team = currentTeam) {
 	    console.error(error);
 	    return alert(error.message);
 	  }
+
+	  await logAudit("undo_last_pick", {
+	    draft_id: draft.id,
+	  });
 
 	  await reload();
 	}
@@ -607,9 +646,24 @@ async function makePick(player, team = currentTeam) {
 
       <div className="scorebar">
         <h1>{draft.name}</h1>
-        <div><b>On the clock:</b> {currentTeam?.name||'—'}</div>
-        <Timer draft={draft}/>
-        <div className="phase">Phase: {currentPhase}</div>
+        <div className="draft-status">
+  	  <div className="clock-team">
+  	      <span className="label">On the clock:</span>
+  	      <span className="team-name">{currentTeam?.name || '-'}</span>
+  	    </div>
+
+  	    <Timer draft={draft}/>
+
+  	    <div className="phase">
+  	      PHASE: {currentPhase?.toUpperCase()}
+  	    </div>
+
+  	    {draft?.salary_cap_enabled && (
+  	      <div className="salary-cap-display">
+  	        Salary Cap Remaining: {currentSalaryRemaining}
+  	      </div>
+  	    )}
+  	  </div>
 
         {isComm&&
           <div className="actions">
@@ -618,6 +672,14 @@ async function makePick(player, team = currentTeam) {
 	    <button onClick={undoLastPick}>Undo Last Pick</button>
             <button onClick={randomize}><Shuffle size={16}/>Randomize</button>
             <button onClick={()=>exportDraft(data)}><Download size={16}/>Export XLS</button>
+	    <label className="override-toggle">
+	      <input
+	        type="checkbox"
+	        checked={overrideConstraints}
+	        onChange={(e) => setOverrideConstraints(e.target.checked)}
+	      />
+	      Override salary / position constraints
+	    </label>
           </div>
         }
       </div>
@@ -649,7 +711,13 @@ async function makePick(player, team = currentTeam) {
   canPick={canPick}
   reload={reload}
 />}
-      {tab==='teams'&&<AllRosters teams={teams} players={players}/>}
+      {tab==='teams'&&(
+        <AllRosters
+          teams={teams}
+          players={players}
+          draft={draft}
+        />
+      )}
       {tab==='commissioner'&&<CommissionerTools draft={draft} teams={teams} players={players} makePick={makePick}/>}
     </section>
   );
@@ -776,15 +844,39 @@ function Roster({team,players}){
   );
 }
 
-function AllRosters({teams,players}){
+function AllRosters({teams,players,draft}){
   return (
     <div className="rosters">
-      {teams.sort((a,b)=>a.draft_order-b.draft_order).map(t=>
-        <div className="panel" key={t.id}>
+      {teams.sort((a,b)=>a.draft_order-b.draft_order).map(t => {
+
+  const roster = players.filter(
+    (p) =>
+      p.drafted_team_id === t.id ||
+      p.assigned_team_id === t.id
+  );
+
+  const salaryUsed = roster.reduce(
+    (sum, p) => sum + Number(p.salary_value || 0),
+    0
+  );
+
+  const salaryRemaining =
+    Number(draft?.salary_cap_amount || 0) - salaryUsed;
+
+  return (
+    <div className="panel" key={t.id}>
           <h2>{t.logo_url&&<img className="teamlogo" src={t.logo_url}/>} {t.name}</h2>
+
+{draft?.salary_cap_enabled && (
+  <div className="salary-row">
+    <span>Used: {salaryUsed}</span>
+    <span>Remaining: {salaryRemaining}</span>
+  </div>
+)}
           <PlayerNames players={players.filter(p=>p.drafted_team_id===t.id||p.assigned_team_id===t.id)}/>
         </div>
-      )}
+      );
+      })}
     </div>
   );
 }
@@ -990,7 +1082,7 @@ function TV(){
       ]);
 
       setData({
-        draft: d.data,
+        draft: d,
         teams:teams.data||[],
         players:players.data||[],
         picks:picks.data||[]
@@ -1023,7 +1115,31 @@ function TV(){
   if(!data)return <div className="loading">Loading TV mode…</div>;
 
   const {draft,teams,players,picks}=data;
+
+if (!draft) {
+  return <div className="loading">Loading TV mode...</div>;
+}
+
+if (!data?.draft) {
+  return <div className="loading">Loading TV mode...</div>;
+}
+
   const currentTeam=snakeTeamAt(teams,draft.current_pick_index);
+  const currentRoster = currentTeam
+    ? players.filter(
+        (p) =>
+          p.drafted_team_id === currentTeam.id ||
+          p.assigned_team_id === currentTeam.id
+      )
+    : [];
+
+  const salaryUsed = currentRoster.reduce(
+    (sum, p) => sum + Number(p.salary_value || 0),
+    0
+  );
+
+  const salaryRemaining =
+    Number(draft.salary_cap_amount || 0) - salaryUsed;
   const nextTeam=snakeTeamAt(teams,draft.current_pick_index+1);
   const currentPick=picks.find(p=>p.id===draft.reveal_pick_id);
 
@@ -1060,12 +1176,39 @@ function TV(){
         <div className="tv-otc-team">
           {currentTeam?.name || '—'}
         </div>
+
+{draft?.salary_cap_enabled && (
+  <div className="tv-salary-cap">
+    Cap Remaining: {salaryRemaining}
+  </div>
+)}
       </div>
 
       <div className="tv-bottom">
-        <div className="tv-label">NEXT PICK</div>
-        <div className="tv-next">{nextTeam?.name || '—'}</div>
-      </div>
+  <div className="tv-label">NEXT PICK</div>
+
+  <div className="tv-next">
+    {nextTeam?.name || '-'}
+  </div>
+
+  {draft?.salary_cap_enabled && (
+    <div className="tv-cap">
+      Cap Remaining: {
+        Number(draft.salary_cap_amount || 0) -
+        players
+          .filter(
+            p =>
+              p.drafted_team_id === nextTeam?.id ||
+              p.assigned_team_id === nextTeam?.id
+          )
+          .reduce(
+            (sum, p) => sum + Number(p.salary_value || 0),
+            0
+          )
+      }
+    </div>
+  )}
+</div>
     </div>
   );
 }
@@ -1085,7 +1228,7 @@ function Viewer(){
       ]);
 
       setData({
-        draft:d.data,
+        draft:d,
         teams:teams.data||[],
         players:players.data||[],
         picks:picks.data||[]
@@ -1129,17 +1272,43 @@ function Viewer(){
         <div className="phase">Phase: {draft.current_phase}</div>
       </div>
 
-      <div className="rosters">
-        {teams.map(t=>(
-          <div className="panel" key={t.id}>
-            <h2>
-              {t.logo_url&&<img className="teamlogo" src={t.logo_url}/>}
-              {t.name}
-            </h2>
-            <PlayerNames players={players.filter(p=>p.drafted_team_id===t.id||p.assigned_team_id===t.id)}/>
+<div className="rosters">
+  {teams.map((t) => {
+    const roster = players.filter(
+      (p) =>
+        p.drafted_team_id === t.id ||
+        p.assigned_team_id === t.id
+    );
+
+    const salaryUsed = roster.reduce(
+      (sum, p) => sum + Number(p.salary_value || 0),
+      0
+    );
+
+    const salaryRemaining =
+      Number(draft?.salary_cap_amount || 0) - salaryUsed;
+
+    return (
+      <div className="panel" key={t.id}>
+        <h2>
+          {t.logo_url && (
+            <img className="teamlogo" src={t.logo_url} />
+          )}
+          {t.name}
+        </h2>
+
+        {draft?.salary_cap_enabled && (
+          <div className="team-salary-summary">
+            <span>Used: {salaryUsed}</span>
+            <span>Remaining: {salaryRemaining}</span>
           </div>
-        ))}
+        )}
+
+        <PlayerNames players={roster} />
       </div>
+    );
+  })}
+</div>
 
       <div className="panel">
         <h2>Pick-by-Pick</h2>

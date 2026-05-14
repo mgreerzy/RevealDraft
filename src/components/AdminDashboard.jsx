@@ -56,6 +56,8 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
 
   const [playerIsCoach, setPlayerIsCoach] = useState("no");
 
+  const [auditLogs, setAuditLogs] = useState([]);
+
   useEffect(() => {
     loadDrafts();
     loadProfiles();
@@ -67,8 +69,23 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
       loadTeams();
       loadPlayers();
       loadPositionConstraints();
+      loadAuditLogs();
     }
   }, [selectedDraft]);
+
+async function loadAuditLogs() {
+  if (!selectedDraft?.id) return;
+
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("*, profiles(email, first_name, last_name)")
+    .eq("draft_id", selectedDraft.id)
+    .order("created_at", { ascending: false });
+
+  if (error) return alert(error.message);
+
+  setAuditLogs(data || []);
+}
 
 async function savePositionConstraint() {
   if (!selectedDraft) return alert("Select a draft first");
@@ -460,6 +477,10 @@ async function resetDraftProgressOnly() {
   await loadTeams();
   await loadDrafts();
 
+  await logAdminAudit("reset_picks_and_queues", {
+    draft_name: selectedDraft.name,
+  });
+
   alert("Draft picks and queues reset");
 }
 
@@ -491,6 +512,10 @@ async function resetDraftProgressOnly() {
     await loadPlayers();
     await loadTeams();
     await loadDrafts();
+
+  await logAdminAudit("reset_entire_draft", {
+    draft_name: selectedDraft.name,
+  });
 
     alert("Entire draft data reset");
   }
@@ -788,6 +813,17 @@ function openLink(path) {
     });
   }
 
+async function logAdminAudit(action, details = {}) {
+  if (!selectedDraft?.id || !profile?.id) return;
+
+  await supabase.from("audit_logs").insert({
+    draft_id: selectedDraft.id,
+    user_id: profile.id,
+    action,
+    details,
+  });
+}
+
   return (
     <div className="admin-page">
       <aside className="admin-sidebar">
@@ -831,6 +867,13 @@ function openLink(path) {
 
 	<button onClick={() => setActiveTab("commissionerAccess")}>
 	  Commissioner Access
+	</button>
+
+	<button onClick={() => {
+	  setActiveTab("audit");
+	  loadAuditLogs();
+	}}>
+	  Audit Log
 	</button>
 
       </aside>
@@ -1025,6 +1068,36 @@ function openLink(path) {
           </button>
         </div>
       ))
+    )}
+  </section>
+)}
+
+{activeTab === "audit" && (
+  <section className="admin-card">
+    <h2>Audit Log</h2>
+
+    {auditLogs.length === 0 ? (
+      <p>No audit activity yet.</p>
+    ) : (
+      auditLogs.map((log) => {
+        const userName =
+          `${log.profiles?.first_name || ""} ${log.profiles?.last_name || ""}`.trim() ||
+          log.profiles?.email ||
+          "Unknown user";
+
+        return (
+          <div key={log.id} className="admin-row">
+            <div>
+              <strong>{log.action}</strong>
+              <br />
+              <small>{new Date(log.created_at).toLocaleString()}</small>
+              <br />
+              <small>By: {userName}</small>
+              <pre>{JSON.stringify(log.details, null, 2)}</pre>
+            </div>
+          </div>
+        );
+      })
     )}
   </section>
 )}
