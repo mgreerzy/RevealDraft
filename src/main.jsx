@@ -1337,5 +1337,5 @@ function beep(){
     new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=').play();
   }catch{}
 }
-
+}
 createRoot(document.getElementById('root')).render(<App/>);
