@@ -542,6 +542,148 @@ async function logAudit(action, details = {}) {
   });
 }
 
+function buildResultsEmailHtml(data) {
+  const { draft, teams, players, picks } = data;
+  const salaryCapEnabled = !!draft?.salary_cap_enabled;
+
+  const pickRows = picks
+    .sort((a, b) => a.pick_number - b.pick_number)
+    .map((pick) => {
+      const player = players.find((p) => p.id === pick.player_id) || {};
+      const team = teams.find((t) => t.id === pick.team_id) || {};
+
+      return `
+        <tr>
+          <td>${pick.pick_number || ""}</td>
+          <td>${team.name || ""}</td>
+          <td>#${player.random_number || ""}</td>
+          <td>${player.name || ""}</td>
+          <td>${player.primary_position || ""}/${player.secondary_position || ""}</td>
+          ${salaryCapEnabled ? `<td>${player.salary_value ?? 0}</td>` : ""}
+        </tr>
+      `;
+    })
+    .join("");
+
+  const rosterSections = teams
+    .sort((a, b) => a.draft_order - b.draft_order)
+    .map((team) => {
+      const roster = players
+        .filter(
+          (p) =>
+            p.drafted_team_id === team.id ||
+            p.assigned_team_id === team.id
+        )
+        .sort((a, b) => (a.random_number || 0) - (b.random_number || 0));
+
+      const salaryUsed = roster.reduce(
+        (sum, p) => sum + Number(p.salary_value || 0),
+        0
+      );
+
+      const playerRows = roster
+        .map(
+          (p) => `
+            <tr>
+              <td>#${p.random_number || ""}</td>
+              <td>${p.name || ""}</td>
+              <td>${p.gender || ""}</td>
+              <td>${p.primary_position || ""}</td>
+              <td>${p.secondary_position || ""}</td>
+              ${salaryCapEnabled ? `<td>${p.salary_value ?? 0}</td>` : ""}
+            </tr>
+          `
+        )
+        .join("");
+
+      return `
+        <h2>${team.name}</h2>
+
+        ${
+          salaryCapEnabled
+            ? `<p><strong>Salary Used:</strong> ${salaryUsed}<br/>
+               <strong>Salary Remaining:</strong> ${
+                 Number(draft.salary_cap_amount || 0) - salaryUsed
+               }</p>`
+            : ""
+        }
+
+        <table>
+          <thead>
+            <tr>
+              <th>Player #</th>
+              <th>Player</th>
+              <th>Gender</th>
+              <th>Primary</th>
+              <th>Secondary</th>
+              ${salaryCapEnabled ? `<th>Salary</th>` : ""}
+            </tr>
+          </thead>
+          <tbody>${playerRows}</tbody>
+        </table>
+      `;
+    })
+    .join("");
+
+  return `
+    <div style="font-family:Arial,sans-serif;color:#111827;">
+      <h1>${draft?.name || "Draft"} Results</h1>
+      <p>Final draft results are below.</p>
+
+      <h2>Pick-by-Pick Results</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Pick</th>
+            <th>Team</th>
+            <th>Player #</th>
+            <th>Player</th>
+            <th>Position</th>
+            ${salaryCapEnabled ? `<th>Salary</th>` : ""}
+          </tr>
+        </thead>
+        <tbody>${pickRows}</tbody>
+      </table>
+
+      <hr/>
+
+      <h2>Team Rosters</h2>
+      ${rosterSections}
+    </div>
+  `;
+}
+
+async function emailResults(data) {
+  const to = window.prompt("Enter recipient email address:");
+
+  if (!to) return;
+
+  const subject = `${data?.draft?.name || "Draft"} Results`;
+
+  const html = buildResultsEmailHtml(data);
+
+  const response = await fetch("/api/send-results", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to,
+      subject,
+      html,
+    }),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    console.error(result);
+    return alert(result.error || "Email failed");
+  }
+
+  alert("Draft results email sent");
+}
+
 function exportDraft(data) {
   const { draft, teams, players, picks } = data;
   const salaryCapEnabled = !!draft?.salary_cap_enabled;
@@ -809,6 +951,7 @@ async function makePick(player, team = currentTeam) {
 	      <button onClick={undoLastPick}>Undo Last Pick</button>
 	      <button onClick={randomize}><Shuffle size={16}/>Randomize</button>
 	      <button onClick={()=>exportDraft(data)}><Download size={16}/>Export Results</button>
+	      <button onClick={() => emailResults(data)}>Email Results</button>
 
 	      <label className="override-toggle">
 	        <input
