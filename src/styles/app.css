@@ -844,3 +844,31 @@ main{
     grid-template-columns:1fr !important;
   }
 }
+
+@media (max-width: 700px){
+  .reveal-bottom-left,
+  .reveal-bottom-right{
+    width:150px;
+    min-height:75px;
+    padding:10px 12px;
+    bottom:18px;
+  }
+
+  .reveal-bottom-left{
+    left:12px;
+  }
+
+  .reveal-bottom-right{
+    right:12px;
+  }
+
+  .reveal-lower-label{
+    font-size:11px;
+    letter-spacing:1px;
+  }
+
+  .reveal-lower-team{
+    font-size:22px;
+    line-height:1;
+  }
+}
