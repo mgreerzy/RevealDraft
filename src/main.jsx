@@ -253,19 +253,18 @@ if (
           <span>RevealDraft</span>
         </div>
 
-	<select
-	  value={draftId || ""}
-	  onChange={(e) => {
+	{profile?.role !== "coach" && (
+	  <select value={draftId} onChange={e=>{
 	    setDraftId(e.target.value);
-	    localStorage.draftId = e.target.value;
-	  }}
-	>
-	  {drafts.map((d) => (
-	    <option key={d.id} value={d.id}>
-	      {d.name}
-	    </option>
-	  ))}
-	</select>
+	    localStorage.draftId=e.target.value;
+	  }}>
+	    {drafts.map(d=>(
+	      <option key={d.id} value={d.id}>
+	        {d.name}
+	      </option>
+	    ))}
+	  </select>
+	)}
 
 	{(profile?.role === "admin" || profile?.role === "commissioner") && (
 	  <button onClick={loadAvailableDrafts}>
