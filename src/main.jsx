@@ -76,17 +76,21 @@ useEffect(() => {
 }, [profile?.id]);
 
 async function loadAvailableDrafts() {
+  // ADMINS: can see all drafts
   if (profile?.role === "admin") {
     const { data, error } = await supabase
       .from("drafts")
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) return alert(error.message);
+    if (error) {
+      console.error(error);
+      return alert(error.message);
+    }
 
     setDrafts(data || []);
 
-    if (!draftId && data?.[0]) {
+    if (!draftId && data?.length) {
       setDraftId(data[0].id);
       localStorage.draftId = data[0].id;
     }
@@ -94,28 +98,24 @@ async function loadAvailableDrafts() {
     return;
   }
 
+  // COMMISSIONERS: only assigned drafts
   if (profile?.role === "commissioner") {
-    const { data: accessRows, error: accessError } = await supabase
+    const { data: assignments, error: assignError } = await supabase
       .from("draft_commissioners")
       .select("draft_id")
       .eq("user_id", profile.id);
 
-    if (accessError) return alert(accessError.message);
-
-    const draftIds = (accessRows || []).map((x) => x.draft_id);
-
-    if (draftIds.length === 0) {
-      setDrafts([]);
-      setDraftId("");
-      localStorage.removeItem("draftId");
-      return;
+    if (assignError) {
+      console.error(assignError);
+      return alert(assignError.message);
     }
 
-    if (profile?.role === "coach") {
-      const { data: coachTeams, error: teamError } = await supabase
-        .from("teams")
-        .select("draft_id")
-        .eq("coach_user_id", profile.id);
+    const draftIds = assignments?.map((a) => a.draft_id) || [];
+
+    if (!draftIds.length) {
+      setDrafts([]);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("drafts")
@@ -123,11 +123,14 @@ async function loadAvailableDrafts() {
       .in("id", draftIds)
       .order("created_at", { ascending: false });
 
-    if (error) return alert(error.message);
+    if (error) {
+      console.error(error);
+      return alert(error.message);
+    }
 
     setDrafts(data || []);
 
-    if (!draftId && data?.[0]) {
+    if (!draftId && data?.length) {
       setDraftId(data[0].id);
       localStorage.draftId = data[0].id;
     }
@@ -135,16 +138,38 @@ async function loadAvailableDrafts() {
     return;
   }
 
+  // COACHES: only drafts where assigned to a team
+  const { data: coachTeams, error: teamError } = await supabase
+    .from("teams")
+    .select("draft_id")
+    .eq("coach_user_id", profile.id);
+
+  if (teamError) {
+    console.error(teamError);
+    return alert(teamError.message);
+  }
+
+  const draftIds = [...new Set(coachTeams?.map((t) => t.draft_id) || [])];
+
+  if (!draftIds.length) {
+    setDrafts([]);
+    return;
+  }
+
   const { data, error } = await supabase
     .from("drafts")
     .select("*")
+    .in("id", draftIds)
     .order("created_at", { ascending: false });
 
-  if (error) return alert(error.message);
+  if (error) {
+    console.error(error);
+    return alert(error.message);
+  }
 
   setDrafts(data || []);
 
-  if (!draftId && data?.[0]) {
+  if (!draftId && data?.length) {
     setDraftId(data[0].id);
     localStorage.draftId = data[0].id;
   }
@@ -1042,12 +1067,16 @@ function CommissionerTools({draft,teams,players,available,makePick}){
       </select>
 
       <PlayerGrid
-	  players={available}
-	  makePick={makePick}
-	  canPick={canPick}
-	  addQueue={addQueue}
+  	players={available}
+	  makePick={(p) => {
+	    const selectedTeam = teams.find((t) => t.id === team);
+	    if (!selectedTeam) return alert("Select a team first");
+	    makePick(p, selectedTeam);
+	  }}
+	  canPick={!!team}
+	  addQueue={() => {}}
 	  salaryCapEnabled={!!draft?.salary_cap_enabled}
-      />
+	/>
 
     </div>
   );
@@ -1337,5 +1366,5 @@ function beep(){
     new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=').play();
   }catch{}
 }
-}
+
 createRoot(document.getElementById('root')).render(<App/>);
