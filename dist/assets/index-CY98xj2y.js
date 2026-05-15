@@ -167,7 +167,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
         </tbody>
       </table>
     `).join(``),c=[...n].sort((e,t)=>e.draft_order-t.draft_order).map(e=>{let n=r.filter(t=>t.drafted_team_id===e.id||t.assigned_team_id===e.id).sort((e,t)=>(e.random_number||0)-(t.random_number||0)),i=n.reduce((e,t)=>e+Number(t.salary_value||0),0),o=Number(t?.salary_cap_amount||0)-i;return`
-        <div style="border:1px solid #dbe6ff;border-radius:14px;padding:16px;margin:18px 0;background:#ffffff;">
+        <div style="border:1px solid #dbe6ff;border-radius:14px;padding:16px;margin:18px 0;background:#ffffff;border-top:6px solid #0a65ff;box-shadow:0 8px 20px rgba(7,27,69,0.12);">
           <h3 style="margin:0 0 10px;color:#071b45;">
             ${e.logo_url?`<img src="${e.logo_url}" width="32" height="32" style="vertical-align:middle;object-fit:contain;margin-right:8px;" />`:``}
             ${e.name||`Unnamed Team`}
@@ -203,20 +203,26 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
           </table>
         </div>
       `}).join(``);return`
-    <div style="font-family:Arial,sans-serif;background:#f4f8ff;padding:24px;color:#06142d;">
+    <div style="font-family:Arial,sans-serif;background:linear-gradient(135deg,#071b45,#0a65ff,#e3192c);padding:28px;color:#06142d;">
       <div style="max-width:900px;margin:0 auto;background:white;border-radius:18px;overflow:hidden;border:1px solid #dbe6ff;">
-        <div style="background:#071b45;color:white;padding:24px;">
+        <div style="background:linear-gradient(135deg,#071b45,#0a65ff);color:white;padding:28px;border-bottom:6px solid #e3192c;">
           <h1 style="margin:0;font-size:30px;">RevealDraft Results</h1>
           <p style="margin:8px 0 0;font-size:18px;">${t?.name||`Draft`}</p>
         </div>
 
         <div style="padding:24px;">
-          <h2 style="color:#e3192c;">Round-by-Round Picks</h2>
+	  <div style="background:linear-gradient(135deg,#fff7ed,#fef3c7);border:2px solid #f59e0b;border-radius:16px;padding:16px;margin-bottom:22px;">
+	    <h2 style="margin:0 0 6px;color:#b45309;">🏆 Draft Recap</h2>
+	    <p style="margin:0;color:#78350f;font-weight:700;">
+	      The draft is complete! Check out the round-by-round results and full team rosters below.
+	    </p>
+	  </div>
+          <h2 style="color:#e3192c;border-left:6px solid #0a65ff;padding-left:10px;">📋 Round-by-Round Picks</h2>
           ${s||`<p>No picks recorded.</p>`}
 
           <hr style="border:none;border-top:1px solid #dbe6ff;margin:28px 0;" />
 
-          <h2 style="color:#e3192c;">Team Rosters</h2>
+          <h2 style="color:#e3192c;border-left:6px solid #0a65ff;padding-left:10px;">👥 Team Rosters</h2>
           ${c||`<p>No rosters available.</p>`}
         </div>
       </div>

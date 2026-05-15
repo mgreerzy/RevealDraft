@@ -601,7 +601,7 @@ function buildResultsEmailHtml(data) {
       const salaryRemaining = Number(draft?.salary_cap_amount || 0) - salaryUsed;
 
       return `
-        <div style="border:1px solid #dbe6ff;border-radius:14px;padding:16px;margin:18px 0;background:#ffffff;">
+        <div style="border:1px solid #dbe6ff;border-radius:14px;padding:16px;margin:18px 0;background:#ffffff;border-top:6px solid #0a65ff;box-shadow:0 8px 20px rgba(7,27,69,0.12);">
           <h3 style="margin:0 0 10px;color:#071b45;">
             ${team.logo_url ? `<img src="${team.logo_url}" width="32" height="32" style="vertical-align:middle;object-fit:contain;margin-right:8px;" />` : ""}
             ${team.name || "Unnamed Team"}
@@ -645,20 +645,26 @@ function buildResultsEmailHtml(data) {
     .join("");
 
   return `
-    <div style="font-family:Arial,sans-serif;background:#f4f8ff;padding:24px;color:#06142d;">
+    <div style="font-family:Arial,sans-serif;background:linear-gradient(135deg,#071b45,#0a65ff,#e3192c);padding:28px;color:#06142d;">
       <div style="max-width:900px;margin:0 auto;background:white;border-radius:18px;overflow:hidden;border:1px solid #dbe6ff;">
-        <div style="background:#071b45;color:white;padding:24px;">
+        <div style="background:linear-gradient(135deg,#071b45,#0a65ff);color:white;padding:28px;border-bottom:6px solid #e3192c;">
           <h1 style="margin:0;font-size:30px;">RevealDraft Results</h1>
           <p style="margin:8px 0 0;font-size:18px;">${draft?.name || "Draft"}</p>
         </div>
 
         <div style="padding:24px;">
-          <h2 style="color:#e3192c;">Round-by-Round Picks</h2>
+	  <div style="background:linear-gradient(135deg,#fff7ed,#fef3c7);border:2px solid #f59e0b;border-radius:16px;padding:16px;margin-bottom:22px;">
+	    <h2 style="margin:0 0 6px;color:#b45309;">🏆 Draft Recap</h2>
+	    <p style="margin:0;color:#78350f;font-weight:700;">
+	      The draft is complete! Check out the round-by-round results and full team rosters below.
+	    </p>
+	  </div>
+          <h2 style="color:#e3192c;border-left:6px solid #0a65ff;padding-left:10px;">📋 Round-by-Round Picks</h2>
           ${roundSections || "<p>No picks recorded.</p>"}
 
           <hr style="border:none;border-top:1px solid #dbe6ff;margin:28px 0;" />
 
-          <h2 style="color:#e3192c;">Team Rosters</h2>
+          <h2 style="color:#e3192c;border-left:6px solid #0a65ff;padding-left:10px;">👥 Team Rosters</h2>
           ${rosterSections || "<p>No rosters available.</p>"}
         </div>
       </div>
