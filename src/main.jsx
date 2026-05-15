@@ -123,6 +123,48 @@ function InviteAccept() {
       },
     });
 
+  async function acceptInviteForExistingUser() {
+    if (!invite) return;
+
+    const email = window.prompt("Enter your account email:");
+    const password = window.prompt("Enter your password:");
+
+    if (!email || !password) return;
+
+    if (email.toLowerCase() !== invite.email.toLowerCase()) {
+      return alert("This invite is for a different email address.");
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) return alert(error.message);
+
+    const userId = data?.user?.id;
+
+    await supabase
+      .from("profiles")
+      .update({ role: "coach" })
+      .eq("id", userId);
+
+    await supabase
+      .from("teams")
+      .update({ coach_user_id: userId })
+      .eq("id", invite.team_id);
+
+    await supabase
+      .from("coach_invites")
+      .update({ accepted: true })
+      .eq("id", invite.id);
+
+    alert("Invite accepted");
+
+    window.location.href = "/";
+  }
+
+
     if (error) {
       console.error(error);
       return alert(error.message);
@@ -202,6 +244,10 @@ function InviteAccept() {
 
       <button onClick={acceptInvite}>
         Create Coach Account
+      </button>
+
+      <button onClick={acceptInviteForExistingUser}>
+        Already have an account? Sign In & Accept Invite
       </button>
     </div>
   );
