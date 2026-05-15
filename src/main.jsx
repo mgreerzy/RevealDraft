@@ -81,6 +81,8 @@ function InviteAccept() {
   const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
 
+  const [existingUser, setExistingUser] = useState(false);
+
   useEffect(() => {
     loadInvite();
   }, []);
@@ -103,11 +105,28 @@ function InviteAccept() {
     }
 
     setInvite(data);
+
+    const { data: existingProfiles } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("email", data.email)
+      .limit(1);
+
+    setExistingUser(!!existingProfiles?.length);
+
     setLoading(false);
   }
 
   async function acceptInvite() {
     if (!invite) return;
+
+if (!firstName || !lastName || !password) {
+  return alert("First name, last name, and password are required.");
+}
+
+if (password.length < 6) {
+  return alert("Password must be at least 6 characters.");
+}
 
     const { data, error } = await supabase.auth.signUp({
       email: invite.email,
@@ -218,32 +237,44 @@ function InviteAccept() {
         <strong>{invite?.drafts?.name}</strong>
       </p>
 
-      <input
-        placeholder="First Name"
-        value={firstName}
-        onChange={(e) => setFirstName(e.target.value)}
-      />
+{existingUser ? (
+  <p>This email already has a RevealDraft account. Sign in to accept this invite.</p>
+) : (
+  <p>Create your coach account below.</p>
+)}
 
-      <input
-        placeholder="Last Name"
-        value={lastName}
-        onChange={(e) => setLastName(e.target.value)}
-      />
+      {!existingUser && (
+  <>
+    <input
+      placeholder="First Name"
+      value={firstName}
+      onChange={(e) => setFirstName(e.target.value)}
+    />
 
-      <input
-        type="password"
-        placeholder="Create Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+    <input
+      placeholder="Last Name"
+      value={lastName}
+      onChange={(e) => setLastName(e.target.value)}
+    />
 
-      <button onClick={acceptInvite}>
-        Create Coach Account
-      </button>
+    <input
+      type="password"
+      placeholder="Create Password"
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+    />
 
-      <button onClick={acceptInviteForExistingUser}>
-        Already have an account? Sign In & Accept Invite
-      </button>
+    <button onClick={acceptInvite}>
+      Create Coach Account
+    </button>
+  </>
+)}
+
+{existingUser && (
+  <button onClick={acceptInviteForExistingUser}>
+    Sign In & Accept Invite
+  </button>
+)}
     </div>
   );
 }
