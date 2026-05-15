@@ -1500,8 +1500,20 @@ async function logAdminAudit(action, details = {}) {
             {teams.length === 0 ? (
               <p>No teams entered.</p>
             ) : (
-teams.map((t) => (
-  <div key={t.id} className="admin-row">
+
+teams.map((t) => {
+
+  const pendingInvite = coachInvites.find(
+    (invite) => invite.team_id === t.id
+  );
+
+  const assignedCoach = profiles.find(
+    (p) => p.id === t.coach_user_id
+  );
+
+  return (
+    <div key={t.id} className="admin-row">
+
     <span>
       {t.logo_url && (
         <img
@@ -1543,24 +1555,21 @@ teams.map((t) => (
 	  onChange={(e) => uploadTeamLogo(t.id, e.target.files[0])}
     />
 
-	{coachInvites.find((invite) => invite.team_id === t.id) ? (
-	  <div className="pending-invite">
-	    Pending invite:{" "}
-	    {
-	      coachInvites.find(
-	        (invite) => invite.team_id === t.id
-	      )?.email
-	    }
+	{assignedCoach ? (
+	  <div className="assigned-coach">
+	    Coach assigned:{" "}
+	    {`${assignedCoach.first_name || ""} ${assignedCoach.last_name || ""}`.trim() ||
+	      assignedCoach.email}
 
-	    <button
-	      onClick={() =>
-	        clearCoachInvite(
-	          coachInvites.find(
-	            (invite) => invite.team_id === t.id
-	          ).id
-	        )
-	      }
-	    >
+	    <button onClick={() => updateTeamCoach(t.id, "")}>
+	      Remove Coach
+	    </button>
+	  </div>
+	) : pendingInvite ? (
+	  <div className="pending-invite">
+	    Pending invite: {pendingInvite.email}
+	
+	    <button onClick={() => clearCoachInvite(pendingInvite.id)}>
 	      Clear Invite
 	    </button>
 	  </div>
@@ -1570,8 +1579,9 @@ teams.map((t) => (
 	  </button>
 	)}
 
-  </div>
-))
+    </div>
+  );
+})
             )}
           </section>
         )}

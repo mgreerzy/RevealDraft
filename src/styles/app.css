@@ -86,6 +86,15 @@ main{padding:20px;max-width:1400px;margin:auto}
 
 .actions button,
 
+.assigned-coach{
+  padding:10px;
+  border-radius:10px;
+  background:rgba(34,197,94,.15);
+  border:1px solid rgba(34,197,94,.45);
+  color:#22c55e;
+  font-weight:800;
+}
+
 .pending-invite{
   padding:10px;
   border-radius:10px;
