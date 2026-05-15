@@ -647,9 +647,9 @@ function buildResultsEmailHtml(data) {
   return `
     <div style="font-family:Arial,sans-serif;background:linear-gradient(135deg,#071b45,#0a65ff,#e3192c);padding:28px;color:#06142d;">
       <div style="max-width:900px;margin:0 auto;background:white;border-radius:18px;overflow:hidden;border:1px solid #dbe6ff;">
-        <div style="background:linear-gradient(135deg,#071b45,#0a65ff);color:white;padding:28px;border-bottom:6px solid #e3192c;">
-          <h1 style="margin:0;font-size:30px;">RevealDraft Results</h1>
-          <p style="margin:8px 0 0;font-size:18px;">${draft?.name || "Draft"}</p>
+        <div style="background:linear-gradient(135deg,#ffffff,#eff6ff);color:#071b45;padding:28px;border-bottom:6px solid #e3192c;">
+          <h1 style="margin:0;font-size:32px;color:#071b45;">🏆 RevealDraft Results</h1>
+          <p style="margin:8px 0 0;font-size:18px;color:#0a65ff;font-weight:700;">${draft?.name || "Draft"}</p>
         </div>
 
         <div style="padding:24px;">
