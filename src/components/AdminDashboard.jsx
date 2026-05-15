@@ -126,6 +126,44 @@ async function loadAuditLogs() {
   setAuditLogs(data || []);
 }
 
+async function sendCoachInvite(team) {
+  const email = window.prompt(`Enter coach email for ${team.name}:`);
+  if (!email) return;
+
+  const token = crypto.randomUUID();
+
+  const { error } = await supabase.from("coach_invites").insert({
+    email,
+    draft_id: selectedDraft.id,
+    team_id: team.id,
+    token,
+  });
+
+  if (error) return alert(error.message);
+
+  const inviteUrl = `${window.location.origin}/invite?token=${token}`;
+
+  const response = await fetch("/api/send-coach-invite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      to: email,
+      inviteUrl,
+      draftName: selectedDraft.name,
+      teamName: team.name,
+    }),
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    console.error(result);
+    return alert(result.error || "Invite email failed");
+  }
+
+  alert("Coach invite sent");
+}
+
 async function savePositionConstraint() {
   if (!selectedDraft) return alert("Select a draft first");
   if (!constraintPosition) return alert("Position is required");
@@ -1456,10 +1494,14 @@ teams.map((t) => (
     />
 
     <input
-      type="file"
-      accept="image/*"
-      onChange={(e) => uploadTeamLogo(t.id, e.target.files[0])}
+	  type="file"
+	  accept="image/*"
+	  onChange={(e) => uploadTeamLogo(t.id, e.target.files[0])}
     />
+
+	<button onClick={() => sendCoachInvite(t)}>
+	  Send Coach Invite
+	</button>
   </div>
 ))
             )}
