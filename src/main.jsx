@@ -548,6 +548,86 @@ function buildResultsEmailHtml(data) {
 
   const sortedPicks = [...picks].sort((a, b) => a.pick_number - b.pick_number);
 
+const pickedPlayers = sortedPicks
+  .map((pick) => {
+    const player = players.find((p) => p.id === pick.player_id);
+    const team = teams.find((t) => t.id === pick.team_id);
+    return player && team ? { pick, player, team } : null;
+  })
+  .filter(Boolean);
+
+const highestSalaryPick = pickedPlayers
+  .filter((x) => x.player.salary_value !== null && x.player.salary_value !== undefined)
+  .sort((a, b) => Number(b.player.salary_value || 0) - Number(a.player.salary_value || 0))[0];
+
+const bestValuePick = pickedPlayers
+  .filter((x) => Number(x.player.salary_value || 0) > 0)
+  .sort((a, b) => Number(a.player.salary_value || 0) - Number(b.player.salary_value || 0))[0];
+
+const teamSummaries = teams.map((team) => {
+  const roster = players.filter(
+    (p) => p.drafted_team_id === team.id || p.assigned_team_id === team.id
+  );
+
+  const positions = roster.flatMap((p) => [
+    p.primary_position,
+    p.secondary_position,
+  ]).filter(Boolean);
+
+  const uniquePositions = new Set(positions.map((p) => p.toUpperCase()));
+
+  const outfieldCount = positions.filter((p) =>
+    ["OF", "LF", "LC", "RC", "RF", "CF"].includes(String(p).toUpperCase())
+  ).length;
+
+  return {
+    team,
+    roster,
+    uniquePositionCount: uniquePositions.size,
+    outfieldCount,
+  };
+});
+
+const mostBalancedTeam = [...teamSummaries].sort(
+  (a, b) => b.uniquePositionCount - a.uniquePositionCount
+)[0];
+
+const mostOFDepthTeam = [...teamSummaries].sort(
+  (a, b) => b.outfieldCount - a.outfieldCount
+)[0];
+
+const awardsSection = `
+  <div style="background:#fff7ed;border:2px solid #f59e0b;border-radius:16px;padding:18px;margin:22px 0;">
+    <h2 style="margin:0 0 14px;color:#b45309;">🏆 Draft Awards</h2>
+
+    <div style="display:grid;gap:10px;">
+      ${
+        bestValuePick
+          ? `<div><strong>⭐ Best Value Pick:</strong> #${bestValuePick.player.random_number} ${bestValuePick.player.name} to ${bestValuePick.team.name}${salaryCapEnabled ? ` — Salary ${bestValuePick.player.salary_value}` : ""}</div>`
+          : ""
+      }
+
+      ${
+        highestSalaryPick && salaryCapEnabled
+          ? `<div><strong>💰 Highest Salary Player:</strong> #${highestSalaryPick.player.random_number} ${highestSalaryPick.player.name} to ${highestSalaryPick.team.name} — Salary ${highestSalaryPick.player.salary_value}</div>`
+          : ""
+      }
+
+      ${
+        mostBalancedTeam
+          ? `<div><strong>🧱 Most Balanced Roster:</strong> ${mostBalancedTeam.team.name} covered ${mostBalancedTeam.uniquePositionCount} positions</div>`
+          : ""
+      }
+
+      ${
+        mostOFDepthTeam
+          ? `<div><strong>⚾ Most OF Depth:</strong> ${mostOFDepthTeam.team.name} with ${mostOFDepthTeam.outfieldCount} OF-capable roster spots</div>`
+          : ""
+      }
+    </div>
+  </div>
+`;
+
   const rounds = sortedPicks.reduce((acc, pick) => {
     const round = pick.round_num || "Unassigned";
     if (!acc[round]) acc[round] = [];
@@ -678,6 +758,7 @@ function buildResultsEmailHtml(data) {
 	      The draft is complete! Check out the round-by-round results and full team rosters below.
 	    </p>
 	  </div>
+	  ${awardsSection}
           <h2 style="color:#e3192c;border-left:6px solid #0a65ff;padding-left:10px;">📋 Round-by-Round Picks</h2>
           ${roundSections || "<p>No picks recorded.</p>"}
 
