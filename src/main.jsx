@@ -546,113 +546,125 @@ function buildResultsEmailHtml(data) {
   const { draft, teams, players, picks } = data;
   const salaryCapEnabled = !!draft?.salary_cap_enabled;
 
-  const pickRows = picks
-    .sort((a, b) => a.pick_number - b.pick_number)
-    .map((pick) => {
-      const player = players.find((p) => p.id === pick.player_id) || {};
-      const team = teams.find((t) => t.id === pick.team_id) || {};
+  const sortedPicks = [...picks].sort((a, b) => a.pick_number - b.pick_number);
 
-      return `
-        <tr>
-          <td>${pick.pick_number || ""}</td>
-          <td>${team.name || ""}</td>
-          <td>#${player.random_number || ""}</td>
-          <td>${player.name || ""}</td>
-          <td>${player.primary_position || ""}/${player.secondary_position || ""}</td>
-          ${salaryCapEnabled ? `<td>${player.salary_value ?? 0}</td>` : ""}
-        </tr>
-      `;
-    })
+  const rounds = sortedPicks.reduce((acc, pick) => {
+    const round = pick.round_num || "Unassigned";
+    if (!acc[round]) acc[round] = [];
+    acc[round].push(pick);
+    return acc;
+  }, {});
+
+  const roundSections = Object.entries(rounds)
+    .map(([round, roundPicks]) => `
+      <h3 style="color:#071b45;margin-top:24px;">Round ${round}</h3>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+        <thead>
+          <tr style="background:#071b45;color:white;">
+            <th style="padding:10px;text-align:left;">Pick</th>
+            <th style="padding:10px;text-align:left;">Team</th>
+            <th style="padding:10px;text-align:left;">Player #</th>
+            <th style="padding:10px;text-align:left;">Player</th>
+            <th style="padding:10px;text-align:left;">Position</th>
+            ${salaryCapEnabled ? `<th style="padding:10px;text-align:left;">Salary</th>` : ""}
+          </tr>
+        </thead>
+        <tbody>
+          ${roundPicks.map((pick) => {
+            const player = players.find((p) => p.id === pick.player_id) || {};
+            const team = teams.find((t) => t.id === pick.team_id) || {};
+
+            return `
+              <tr style="border-bottom:1px solid #e5e7eb;">
+                <td style="padding:10px;">${pick.pick_number || ""}</td>
+                <td style="padding:10px;font-weight:700;">${team.name || ""}</td>
+                <td style="padding:10px;">#${player.random_number || ""}</td>
+                <td style="padding:10px;">${player.name || ""}</td>
+                <td style="padding:10px;">${player.primary_position || ""}/${player.secondary_position || ""}</td>
+                ${salaryCapEnabled ? `<td style="padding:10px;">${player.salary_value ?? 0}</td>` : ""}
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    `)
     .join("");
 
-  const rosterSections = teams
+  const rosterSections = [...teams]
     .sort((a, b) => a.draft_order - b.draft_order)
     .map((team) => {
       const roster = players
-        .filter(
-          (p) =>
-            p.drafted_team_id === team.id ||
-            p.assigned_team_id === team.id
-        )
+        .filter((p) => p.drafted_team_id === team.id || p.assigned_team_id === team.id)
         .sort((a, b) => (a.random_number || 0) - (b.random_number || 0));
 
-      const salaryUsed = roster.reduce(
-        (sum, p) => sum + Number(p.salary_value || 0),
-        0
-      );
-
-      const playerRows = roster
-        .map(
-          (p) => `
-            <tr>
-              <td>#${p.random_number || ""}</td>
-              <td>${p.name || ""}</td>
-              <td>${p.gender || ""}</td>
-              <td>${p.primary_position || ""}</td>
-              <td>${p.secondary_position || ""}</td>
-              ${salaryCapEnabled ? `<td>${p.salary_value ?? 0}</td>` : ""}
-            </tr>
-          `
-        )
-        .join("");
+      const salaryUsed = roster.reduce((sum, p) => sum + Number(p.salary_value || 0), 0);
+      const salaryRemaining = Number(draft?.salary_cap_amount || 0) - salaryUsed;
 
       return `
-        <h2>${team.name}</h2>
+        <div style="border:1px solid #dbe6ff;border-radius:14px;padding:16px;margin:18px 0;background:#ffffff;">
+          <h3 style="margin:0 0 10px;color:#071b45;">
+            ${team.logo_url ? `<img src="${team.logo_url}" width="32" height="32" style="vertical-align:middle;object-fit:contain;margin-right:8px;" />` : ""}
+            ${team.name || "Unnamed Team"}
+          </h3>
 
-        ${
-          salaryCapEnabled
-            ? `<p><strong>Salary Used:</strong> ${salaryUsed}<br/>
-               <strong>Salary Remaining:</strong> ${
-                 Number(draft.salary_cap_amount || 0) - salaryUsed
-               }</p>`
-            : ""
-        }
+          ${
+            salaryCapEnabled
+              ? `<p style="margin:8px 0;color:#16a34a;font-weight:700;">
+                  Salary Used: ${salaryUsed} &nbsp; | &nbsp; Salary Remaining: ${salaryRemaining}
+                </p>`
+              : ""
+          }
 
-        <table>
-          <thead>
-            <tr>
-              <th>Player #</th>
-              <th>Player</th>
-              <th>Gender</th>
-              <th>Primary</th>
-              <th>Secondary</th>
-              ${salaryCapEnabled ? `<th>Salary</th>` : ""}
-            </tr>
-          </thead>
-          <tbody>${playerRows}</tbody>
-        </table>
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#0a65ff;color:white;">
+                <th style="padding:9px;text-align:left;">#</th>
+                <th style="padding:9px;text-align:left;">Player</th>
+                <th style="padding:9px;text-align:left;">Gender</th>
+                <th style="padding:9px;text-align:left;">Primary</th>
+                <th style="padding:9px;text-align:left;">Secondary</th>
+                ${salaryCapEnabled ? `<th style="padding:9px;text-align:left;">Salary</th>` : ""}
+              </tr>
+            </thead>
+            <tbody>
+              ${roster.map((p) => `
+                <tr style="border-bottom:1px solid #eef2ff;">
+                  <td style="padding:9px;">#${p.random_number || ""}</td>
+                  <td style="padding:9px;font-weight:700;">${p.name || ""}</td>
+                  <td style="padding:9px;">${p.gender || ""}</td>
+                  <td style="padding:9px;">${p.primary_position || ""}</td>
+                  <td style="padding:9px;">${p.secondary_position || ""}</td>
+                  ${salaryCapEnabled ? `<td style="padding:9px;">${p.salary_value ?? 0}</td>` : ""}
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
       `;
     })
     .join("");
 
   return `
-    <div style="font-family:Arial,sans-serif;color:#111827;">
-      <h1>${draft?.name || "Draft"} Results</h1>
-      <p>Final draft results are below.</p>
+    <div style="font-family:Arial,sans-serif;background:#f4f8ff;padding:24px;color:#06142d;">
+      <div style="max-width:900px;margin:0 auto;background:white;border-radius:18px;overflow:hidden;border:1px solid #dbe6ff;">
+        <div style="background:#071b45;color:white;padding:24px;">
+          <h1 style="margin:0;font-size:30px;">RevealDraft Results</h1>
+          <p style="margin:8px 0 0;font-size:18px;">${draft?.name || "Draft"}</p>
+        </div>
 
-      <h2>Pick-by-Pick Results</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Pick</th>
-            <th>Team</th>
-            <th>Player #</th>
-            <th>Player</th>
-            <th>Position</th>
-            ${salaryCapEnabled ? `<th>Salary</th>` : ""}
-          </tr>
-        </thead>
-        <tbody>${pickRows}</tbody>
-      </table>
+        <div style="padding:24px;">
+          <h2 style="color:#e3192c;">Round-by-Round Picks</h2>
+          ${roundSections || "<p>No picks recorded.</p>"}
 
-      <hr/>
+          <hr style="border:none;border-top:1px solid #dbe6ff;margin:28px 0;" />
 
-      <h2>Team Rosters</h2>
-      ${rosterSections}
+          <h2 style="color:#e3192c;">Team Rosters</h2>
+          ${rosterSections || "<p>No rosters available.</p>"}
+        </div>
+      </div>
     </div>
   `;
 }
-
 async function emailResults(data) {
   const to = window.prompt("Enter recipient email address:");
 
@@ -674,12 +686,18 @@ async function emailResults(data) {
     }),
   });
 
-  const result = await response.json();
+  let result = null;
 
-  if (!response.ok) {
-    console.error(result);
-    return alert(result.error || "Email failed");
-  }
+try {
+  result = await response.json();
+} catch (e) {
+  result = {};
+}
+
+if (!response.ok) {
+  console.error(result);
+  return alert(result.error || "Email failed");
+}
 
   alert("Draft results email sent");
 }
