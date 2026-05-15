@@ -72,11 +72,9 @@ function Login(){
 
 function InviteAccept() {
   const params = new URLSearchParams(window.location.search);
-
   const token = params.get("token");
 
   const [invite, setInvite] = useState(null);
-
   const [loading, setLoading] = useState(true);
 
   const [firstName, setFirstName] = useState("");
@@ -123,48 +121,6 @@ function InviteAccept() {
       },
     });
 
-  async function acceptInviteForExistingUser() {
-    if (!invite) return;
-
-    const email = window.prompt("Enter your account email:");
-    const password = window.prompt("Enter your password:");
-
-    if (!email || !password) return;
-
-    if (email.toLowerCase() !== invite.email.toLowerCase()) {
-      return alert("This invite is for a different email address.");
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) return alert(error.message);
-
-    const userId = data?.user?.id;
-
-    await supabase
-      .from("profiles")
-      .update({ role: "coach" })
-      .eq("id", userId);
-
-    await supabase
-      .from("teams")
-      .update({ coach_user_id: userId })
-      .eq("id", invite.team_id);
-
-    await supabase
-      .from("coach_invites")
-      .update({ accepted: true })
-      .eq("id", invite.id);
-
-    alert("Invite accepted");
-
-    window.location.href = "/";
-  }
-
-
     if (error) {
       console.error(error);
       return alert(error.message);
@@ -200,7 +156,46 @@ function InviteAccept() {
       .eq("id", invite.id);
 
     alert("Account created successfully");
+    window.location.href = "/";
+  }
 
+  async function acceptInviteForExistingUser() {
+    if (!invite) return;
+
+    const email = window.prompt("Enter your account email:");
+    const existingPassword = window.prompt("Enter your password:");
+
+    if (!email || !existingPassword) return;
+
+    if (email.toLowerCase() !== invite.email.toLowerCase()) {
+      return alert("This invite is for a different email address.");
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: existingPassword,
+    });
+
+    if (error) return alert(error.message);
+
+    const userId = data?.user?.id;
+
+    await supabase
+      .from("profiles")
+      .update({ role: "coach" })
+      .eq("id", userId);
+
+    await supabase
+      .from("teams")
+      .update({ coach_user_id: userId })
+      .eq("id", invite.team_id);
+
+    await supabase
+      .from("coach_invites")
+      .update({ accepted: true })
+      .eq("id", invite.id);
+
+    alert("Invite accepted");
     window.location.href = "/";
   }
 
