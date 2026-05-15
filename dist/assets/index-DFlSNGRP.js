@@ -205,9 +205,28 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
       `}).join(``);return`
     <div style="font-family:Arial,sans-serif;background:linear-gradient(135deg,#071b45,#0a65ff,#e3192c);padding:28px;color:#06142d;">
       <div style="max-width:900px;margin:0 auto;background:white;border-radius:18px;overflow:hidden;border:1px solid #dbe6ff;">
-        <div style="background:linear-gradient(135deg,#ffffff,#eff6ff);color:#071b45;padding:28px;border-bottom:6px solid #e3192c;">
-          <h1 style="margin:0;font-size:32px;font-weight:900;color:#000000;">🏆 RevealDraft Results</h1>
-          <p style="margin:8px 0 0;font-size:18px;color:#1d4ed8;font-weight:800;">${t?.name||`Draft`}</p>
+        <div style="
+	  background:linear-gradient(135deg,#fff7ed,#fef3c7);
+	  color:#78350f;
+	  padding:28px;
+	  border-bottom:6px solid #e3192c;
+	">
+          <h1 style="
+	    margin:0;
+	    font-size:34px;
+	    font-weight:900;
+	    color:#b45309;
+	  ">
+	    🏆 RevealDraft Results
+	  </h1>
+          <p style="
+	    margin:10px 0 0;
+	    font-size:20px;
+	    color:#92400e;
+	    font-weight:800;
+	  ">
+	  ${t?.name||`Draft`}
+	  </p>
         </div>
 
         <div style="padding:24px;">
