@@ -71,10 +71,138 @@ function Login(){
 }
 
 function InviteAccept() {
+  const params = new URLSearchParams(window.location.search);
+
+  const token = params.get("token");
+
+  const [invite, setInvite] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    loadInvite();
+  }, []);
+
+  async function loadInvite() {
+    const { data, error } = await supabase
+      .from("coach_invites")
+      .select(`
+        *,
+        drafts(name),
+        teams(name)
+      `)
+      .eq("token", token)
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert("Invalid invite");
+      return;
+    }
+
+    setInvite(data);
+    setLoading(false);
+  }
+
+  async function acceptInvite() {
+    if (!invite) return;
+
+    const { data, error } = await supabase.auth.signUp({
+      email: invite.email,
+      password,
+      options: {
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          role: "coach",
+        },
+      },
+    });
+
+    if (error) {
+      console.error(error);
+      return alert(error.message);
+    }
+
+    const userId = data?.user?.id;
+
+    if (!userId) {
+      return alert("User creation failed");
+    }
+
+    await supabase
+      .from("profiles")
+      .update({
+        first_name: firstName,
+        last_name: lastName,
+        role: "coach",
+      })
+      .eq("id", userId);
+
+    await supabase
+      .from("teams")
+      .update({
+        coach_user_id: userId,
+      })
+      .eq("id", invite.team_id);
+
+    await supabase
+      .from("coach_invites")
+      .update({
+        accepted: true,
+      })
+      .eq("id", invite.id);
+
+    alert("Account created successfully");
+
+    window.location.href = "/";
+  }
+
+  if (loading) {
+    return (
+      <div className="login">
+        <h1>Loading Invite...</h1>
+      </div>
+    );
+  }
+
   return (
     <div className="login">
       <h1>Accept Coach Invite</h1>
-      <p>Invite onboarding screen coming next.</p>
+
+      <p>
+        You have been invited to coach{" "}
+        <strong>{invite?.teams?.name}</strong>
+        {" "}in{" "}
+        <strong>{invite?.drafts?.name}</strong>
+      </p>
+
+      <input
+        placeholder="First Name"
+        value={firstName}
+        onChange={(e) => setFirstName(e.target.value)}
+      />
+
+      <input
+        placeholder="Last Name"
+        value={lastName}
+        onChange={(e) => setLastName(e.target.value)}
+      />
+
+      <input
+        type="password"
+        placeholder="Create Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+
+      <button onClick={acceptInvite}>
+        Create Coach Account
+      </button>
     </div>
   );
 }
