@@ -14,6 +14,10 @@ import { playSound } from "./lib/sounds";
 const logo='/revealdraft-logo.jpeg';
 
 function App(){
+  if (location.pathname.startsWith("/invite")) {
+    return <InviteAccept />;
+  }
+
   const[session,setSession]=useState(null);
   const[profile,setProfile]=useState(null);
   const[drafts,setDrafts]=useState([]);
@@ -75,6 +79,15 @@ function Shell({profile,draftId,setDraftId}){
 useEffect(() => {
   loadAvailableDrafts();
 }, [profile?.id]);
+
+function InviteAccept() {
+  return (
+    <div className="login">
+      <h1>Accept Coach Invite</h1>
+      <p>Invite onboarding screen coming next.</p>
+    </div>
+  );
+}
 
 async function loadAvailableDrafts() {
   // ADMINS: can see all drafts
