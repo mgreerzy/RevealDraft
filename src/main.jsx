@@ -70,6 +70,15 @@ function Login(){
   );
 }
 
+function InviteAccept() {
+  return (
+    <div className="login">
+      <h1>Accept Coach Invite</h1>
+      <p>Invite onboarding screen coming next.</p>
+    </div>
+  );
+}
+
 function Shell({profile,draftId,setDraftId}){
   const [viewMode, setViewMode] = useState("draft");
   const[drafts,setDrafts]=useState([]);
@@ -79,15 +88,6 @@ function Shell({profile,draftId,setDraftId}){
 useEffect(() => {
   loadAvailableDrafts();
 }, [profile?.id]);
-
-function InviteAccept() {
-  return (
-    <div className="login">
-      <h1>Accept Coach Invite</h1>
-      <p>Invite onboarding screen coming next.</p>
-    </div>
-  );
-}
 
 async function loadAvailableDrafts() {
   // ADMINS: can see all drafts
