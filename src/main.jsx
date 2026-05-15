@@ -200,11 +200,6 @@ if (password.length < 6) {
     const userId = data?.user?.id;
 
     await supabase
-      .from("profiles")
-      .update({ role: "coach" })
-      .eq("id", userId);
-
-    await supabase
       .from("teams")
       .update({ coach_user_id: userId })
       .eq("id", invite.team_id);

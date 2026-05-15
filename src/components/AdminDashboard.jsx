@@ -58,6 +58,8 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
 
   const [auditLogs, setAuditLogs] = useState([]);
 
+  const [coachInvites, setCoachInvites] = useState([]);
+
   const [autoPickMode, setAutoPickMode] = useState("disabled");
 
   const setupChecklist = [
@@ -109,6 +111,7 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
       loadPlayers();
       loadPositionConstraints();
       loadAuditLogs();
+      loadCoachInvites();
     }
   }, [selectedDraft]);
 
@@ -127,6 +130,17 @@ async function loadAuditLogs() {
 }
 
 async function sendCoachInvite(team) {
+
+  const existingInvite = coachInvites.find(
+    (invite) => invite.team_id === team.id
+  );
+  
+  if (existingInvite) {
+    return alert(
+      `There is already a pending invite for ${existingInvite.email}. Clear it before sending another.`
+    );
+  }
+
   const email = window.prompt(`Enter coach email for ${team.name}:`);
   if (!email) return;
 
@@ -162,6 +176,22 @@ async function sendCoachInvite(team) {
   }
 
   alert("Coach invite sent");
+
+  await loadCoachInvites();
+}
+
+async function clearCoachInvite(inviteId) {
+  const confirmClear = window.confirm("Clear this pending coach invite?");
+  if (!confirmClear) return;
+
+  const { error } = await supabase
+    .from("coach_invites")
+    .delete()
+    .eq("id", inviteId);
+
+  if (error) return alert(error.message);
+
+  await loadCoachInvites();
 }
 
 async function savePositionConstraint() {
@@ -407,6 +437,20 @@ async function removeCommissionerAccess(id) {
     setSalaryCapAmount(draft.salary_cap_amount || "");
     setPickSeconds(draft.pick_seconds || 90);
     setStatus(draft.status || "setup");
+  }
+
+  async function loadCoachInvites() {
+    if (!selectedDraft?.id) return;
+
+    const { data, error } = await supabase
+      .from("coach_invites")
+      .select("*")
+      .eq("draft_id", selectedDraft.id)
+      .eq("accepted", false);
+
+    if (error) return alert(error.message);
+
+    setCoachInvites(data || []);
   }
 
   async function loadTeams() {
@@ -1499,9 +1543,33 @@ teams.map((t) => (
 	  onChange={(e) => uploadTeamLogo(t.id, e.target.files[0])}
     />
 
-	<button onClick={() => sendCoachInvite(t)}>
-	  Send Coach Invite
-	</button>
+	{coachInvites.find((invite) => invite.team_id === t.id) ? (
+	  <div className="pending-invite">
+	    Pending invite:{" "}
+	    {
+	      coachInvites.find(
+	        (invite) => invite.team_id === t.id
+	      )?.email
+	    }
+
+	    <button
+	      onClick={() =>
+	        clearCoachInvite(
+	          coachInvites.find(
+	            (invite) => invite.team_id === t.id
+	          ).id
+	        )
+	      }
+	    >
+	      Clear Invite
+	    </button>
+	  </div>
+	) : (
+	  <button onClick={() => sendCoachInvite(t)}>
+	    Send Coach Invite
+	  </button>
+	)}
+
   </div>
 ))
             )}

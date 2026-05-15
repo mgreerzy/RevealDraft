@@ -86,6 +86,15 @@ main{padding:20px;max-width:1400px;margin:auto}
 
 .actions button,
 
+.pending-invite{
+  padding:10px;
+  border-radius:10px;
+  background:rgba(245,158,11,.15);
+  border:1px solid rgba(245,158,11,.45);
+  color:#f59e0b;
+  font-weight:800;
+}
+
 .upload{
   display:inline-flex;
   align-items:center;
