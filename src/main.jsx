@@ -160,19 +160,18 @@ if (password.length < 6) {
       })
       .eq("id", userId);
 
-    await supabase
-      .from("teams")
-      .update({
-        coach_user_id: userId,
-      })
-      .eq("id", invite.team_id);
+    const { error: acceptError } = await supabase.rpc(
+      "accept_coach_invite",
+      {
+        invite_token: token,
+        target_user_id: userId,
+      }
+    );
 
-    await supabase
-      .from("coach_invites")
-      .update({
-        accepted: true,
-      })
-      .eq("id", invite.id);
+    if (acceptError) {
+      console.error(acceptError);
+      return alert(acceptError.message);
+    }
 
     alert("Account created successfully");
     window.location.href = "/";
@@ -199,15 +198,18 @@ if (password.length < 6) {
 
     const userId = data?.user?.id;
 
-    await supabase
-      .from("teams")
-      .update({ coach_user_id: userId })
-      .eq("id", invite.team_id);
+    const { error: acceptError } = await supabase.rpc(
+      "accept_coach_invite",
+      {
+        invite_token: token,
+        target_user_id: userId,
+      }
+    );
 
-    await supabase
-      .from("coach_invites")
-      .update({ accepted: true })
-      .eq("id", invite.id);
+    if (acceptError) {
+      console.error(acceptError);
+      return alert(acceptError.message);
+    }
 
     alert("Invite accepted");
     window.location.href = "/";
