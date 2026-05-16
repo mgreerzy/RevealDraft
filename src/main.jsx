@@ -398,13 +398,14 @@ async function loadAvailableDrafts() {
   },[draftId]);
 
   async function load(){
-	const[d,t,p,pk,q,c]=await Promise.all([
+	const[d,t,p,pk,q,c,prof]=await Promise.all([
 	  supabase.from('drafts').select('*').eq('id',draftId).single(),
 	  supabase.from('teams').select('*').eq('draft_id',draftId),
 	  supabase.from('players').select('*').eq('draft_id',draftId),
 	  supabase.from('picks').select('*').eq('draft_id',draftId).order('pick_number'),
 	  supabase.from('queues').select('*').eq('draft_id',draftId).order('rank'),
-	  supabase.from('draft_position_constraints').select('*').eq('draft_id',draftId)
+	  supabase.from('draft_position_constraints').select('*').eq('draft_id',draftId),
+          supabase.from("profiles").select("*"),
 	]);
 
     setData({
@@ -414,6 +415,7 @@ async function loadAvailableDrafts() {
       picks:pk.data||[],
       queues:q.data||[],
       constraints:c.data||[],
+      profiles: prof.data || [],
     });
   }
 
@@ -520,10 +522,13 @@ function Admin({drafts,reload}){
 }
 
 function DraftRoom({data,profile,isComm,reload}){
-  const{draft,teams,players,picks,queues,constraints=[]}=data;
+  const {draft,teams,players,picks,queues,constraints=[],profiles=[]}=data;
   console.log("DRAFT DATA:", draft);
   const myTeam=teams.find(t=>t.coach_user_id===profile.id);
   const currentTeam=snakeTeamAt(teams,draft.current_pick_index);
+
+  const draftCompleted = draft?.status === "completed";
+
   const [overrideConstraints, setOverrideConstraints] = useState(false);
   const [isPicking, setIsPicking] = useState(false);
   const currentRoster = currentTeam
@@ -550,7 +555,10 @@ function DraftRoom({data,profile,isComm,reload}){
     !p.is_coach &&
     (currentPhase==='any'||p.gender===currentPhase||p.gender==='any')
 );
-  const canPick=(isComm||currentTeam?.id===myTeam?.id)&&draft.status==='live';
+  const canPick =
+    !draftCompleted &&
+    (isComm || currentTeam?.id === myTeam?.id) &&
+    draft.status === "live";
   const[tab,setTab]=useState('available');
   const[flash,setFlash]=useState(null);
 
@@ -1139,6 +1147,39 @@ async function makePick(player, team = currentTeam) {
       .eq('id',draft.id);
   }
 
+async function completeDraft() {
+  if (!draft?.id) return alert("No draft selected.");
+
+  const confirmComplete = window.confirm(
+    "Complete this draft? This will stop live drafting but keep all results and rosters."
+  );
+
+  if (!confirmComplete) return;
+
+  const { error } = await supabase
+    .from("drafts")
+    .update({ status: "completed" })
+    .eq("id", draft.id);
+
+  if (error) return alert(error.message);
+
+  await fetch("/api/send-completed-draft-emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      draft,
+      teams,
+      players,
+      profiles: data.profiles || [],
+    }),
+  });
+
+  alert("Draft completed.");
+  await reload();
+}
+
   async function randomize(){
     const shuffled=shuffle(teams);
 
@@ -1203,6 +1244,21 @@ async function makePick(player, team = currentTeam) {
 	      <button onClick={()=>pause('paused')}><Pause size={16}/>Pause</button>
 	      <button onClick={undoLastPick}>Undo Last Pick</button>
 	      <button onClick={randomize}><Shuffle size={16}/>Randomize</button>
+	      {(profile?.role === "admin" ||
+	        profile?.role === "commissioner") && (
+	        <button
+	          onClick={completeDraft}
+	          style={{
+	            background: "#16a34a",
+	            border: "1px solid #22c55e",
+	            color: "white",
+	            fontWeight: 800,
+	            marginLeft: 10,
+	          }}
+	        >
+	          Complete Draft
+	        </button>
+	      )}
 	      <button onClick={()=>exportDraft(data)}><Download size={16}/>Export Results</button>
 	      <button onClick={() => emailResults(data)}>Email Results</button>
 
@@ -1224,15 +1280,17 @@ async function makePick(player, team = currentTeam) {
           .map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}
       </nav>
 
-      {tab==='available'&&(
+	{tab==='available'&&(
 	  <PlayerGrid
 	    players={available}
 	    makePick={makePick}
 	    canPick={canPick}
 	    addQueue={addQueue}
 	    salaryCapEnabled={!!draft?.salary_cap_enabled}
+	    isPicking={isPicking}
+	    draftCompleted={draftCompleted}
 	  />
-      )}
+	)}
 
       {tab==='picks'&&<PickList picks={picks} players={players} teams={teams}/>}
       {tab==='roster'&&<Roster team={myTeam} players={players}/>}
@@ -1337,7 +1395,8 @@ function PlayerGrid({
   canPick,
   addQueue,
   salaryCapEnabled,
-  isPicking
+  isPicking,
+  draftCompleted={draftCompleted}
 }){
   return (
 
@@ -1355,15 +1414,22 @@ function PlayerGrid({
 	    )}
 
             <button
-		  disabled={!canPick || isPicking}
-		  onClick={()=>makePick(p)}
-		>
-		  {isPicking ? "Drafting..." : "Draft"}
-	    </button>
+	      disabled={!canPick || isPicking || draftCompleted}
+	  onClick={() => makePick(p)}
+	>
+	  {draftCompleted
+	    ? "Draft Complete"
+	    : isPicking
+	    ? "Drafting..."
+	    : "Draft"}
+	  </button>
 
-            <button onClick={()=>addQueue(p)}>
-              Queue
-            </button>
+<button
+  disabled={draftCompleted}
+  onClick={() => addQueue(p)}
+>
+  Queue
+</button>
           </div>
         ))}
     </div>
@@ -1590,6 +1656,7 @@ function CommissionerTools({draft,teams,players,available,makePick}){
 	  addQueue={() => {}}
 	  salaryCapEnabled={!!draft?.salary_cap_enabled}
 	  isPicking={isPicking}
+	  draftCompleted={draftCompleted}
 	/>
 
     </div>
@@ -1824,6 +1891,12 @@ function Viewer(){
     <div className="draft">
       <div className="scorebar">
         <h1>{draft.name}</h1>
+	{draftCompleted && (
+	  <div className="draft-completed-banner">
+	    ✅ Draft Completed — Rosters are locked.
+	  </div>
+	)}
+
         <div><b>On the clock:</b> {currentTeam?.name||'—'}</div>
         <Timer draft={draft}/>
         <div className="phase">Phase: {draft.current_phase}</div>

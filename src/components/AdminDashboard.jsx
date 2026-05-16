@@ -194,6 +194,20 @@ async function clearCoachInvite(inviteId) {
   await loadCoachInvites();
 }
 
+async function updateProfileField(id, field, value) {
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      [field]: value,
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error(error);
+    alert(error.message);
+  }
+}
+
 async function savePositionConstraint() {
   if (!selectedDraft) return alert("Select a draft first");
   if (!constraintPosition) return alert("Position is required");
@@ -417,6 +431,33 @@ async function removeCommissionerAccess(id) {
 
     setProfiles(data || []);
   }
+
+async function completeDraft() {
+  if (!selectedDraft?.id) return alert("Select a draft first.");
+
+  const confirmComplete = window.confirm(
+    "Complete this draft? This will stop live drafting but keep all results and rosters."
+  );
+
+  if (!confirmComplete) return;
+
+  const { error } = await supabase
+    .from("drafts")
+    .update({
+      status: "completed",
+    })
+    .eq("id", selectedDraft.id);
+
+  if (error) return alert(error.message);
+
+  await logAdminAudit("draft_completed", {
+    draft_name: selectedDraft.name,
+  });
+
+  await loadDrafts();
+
+  alert("Draft completed.");
+}
 
   function loadDraftIntoForm(draft) {
     if (!draft) return;
@@ -1452,6 +1493,19 @@ async function logAdminAudit(action, details = {}) {
               >
                 Reset Entire Draft
               </button>
+
+	      <button
+  		onClick={completeDraft}
+		  style={{
+		    background: "#16a34a",
+		    border: "1px solid #22c55e",
+		    color: "white",
+		    fontWeight: 800,
+		  }}
+		>
+		  Complete Draft
+		</button>
+
             </div>
           </section>
         )}
@@ -1785,6 +1839,30 @@ teams.map((t) => {
 		      viewer
 		    </option>
 		  </select>
+
+		  <input
+		    placeholder="Phone Number"
+		    defaultValue={p.phone || ""}
+		    onBlur={(e) =>
+		      updateProfileField(
+		        p.id,
+		        "phone",
+		        e.target.value
+		      )
+		    }
+		  />
+
+		  <input
+		    placeholder="Facebook Profile URL"
+		    defaultValue={p.facebook_url || ""}
+		    onBlur={(e) =>
+		      updateProfileField(
+		        p.id,
+		        "facebook_url",
+		        e.target.value
+		      )
+		    }
+		  />
 
 		  {profile?.role === "admin" && (
 		    <button
