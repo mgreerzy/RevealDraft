@@ -28,6 +28,15 @@ export default async function handler(req, res) {
           subject: `${draft.name} - Your Team Roster`,
           html: `
             <div style="font-family:Arial,sans-serif;padding:24px;">
+
+	  ${
+	    coachMessage
+	      ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:12px;padding:14px;margin:16px 0;color:#78350f;">
+	          ${coachMessage.replace(/\n/g, "<br/>")}
+	        </div>`
+	      : ""
+	  }
+
               <h1>${team.name} Roster</h1>
               <p>Your draft roster for <strong>${draft.name}</strong> is below.</p>
 
@@ -55,6 +64,13 @@ export default async function handler(req, res) {
                     .join("")}
                 </tbody>
               </table>
+
+	      ${
+	        emailSignature
+	          ? `<hr/><p>${emailSignature.replace(/\n/g, "<br/>")}</p>`
+	          : ""
+	      }
+
             </div>
           `,
         });
@@ -73,6 +89,14 @@ export default async function handler(req, res) {
             <div style="font-family:Arial,sans-serif;padding:24px;">
               <h1>You were drafted!</h1>
 
+	      ${
+	        playerMessage
+	          ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:12px;padding:14px;margin:16px 0;color:#78350f;">
+	              ${playerMessage.replace(/\n/g, "<br/>")}
+	            </div>`
+	          : ""
+	      }
+
               <p>
                 You were drafted to <strong>${team.name}</strong>
                 in <strong>${draft.name}</strong>.
@@ -89,6 +113,13 @@ export default async function handler(req, res) {
                     : "Not provided"
                 }
               </p>
+
+	      ${
+	        emailSignature
+	          ? `<hr/><p>${emailSignature.replace(/\n/g, "<br/>")}</p>`
+	          : ""
+	      }
+
             </div>
           `,
         });

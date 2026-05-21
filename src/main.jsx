@@ -10,6 +10,7 @@ import{snakeTeamAt,roundFor,shuffle}from'./lib/draftLogic';
 import{exportDraft}from'./lib/exportExcel';
 import AdminDashboard from './components/AdminDashboard';
 import { playSound } from "./lib/sounds";
+import UserManagement from "./components/UserManagement.jsx";
 
 const logo='/revealdraft-logo.jpeg';
 
@@ -446,14 +447,44 @@ if (
   );
 }
 
+if (profile?.active === false) {
+  return (
+    <div className="loading">
+      <h1>Account Deactivated</h1>
+      <p>Your account has been deactivated. Please contact an administrator.</p>
+
+      <button onClick={() => supabase.auth.signOut()}>
+        Sign Out
+      </button>
+    </div>
+  );
+}
+
+if (
+  viewMode === "users" &&
+  profile?.role === "admin"
+) {
+  return (
+    <UserManagement
+      profile={profile}
+      onBack={(target) =>
+        setViewMode(target)
+      }
+    />
+  );
+}
+
   if (isComm && viewMode === "admin") {
     return (
       <AdminDashboard
-        profile={profile}
-        onSwitchToDraft={async () => {
-	  setViewMode("draft");
-	  await loadAvailableDrafts();
-	}}
+  	profile={profile}
+  	onOpenUserManagement={() =>
+    	setViewMode("users")
+  	}
+  	onSwitchToDraft={async () => {
+    	setViewMode("draft");
+    	await loadAvailableDrafts();
+  	}}
       />
     );
   }
@@ -488,11 +519,18 @@ if (
         <span className="pill">{profile.role}</span>
         <button onClick={()=>supabase.auth.signOut()}>Sign Out</button>
 
+{profile?.role === "admin" && (
+  <button onClick={() => setViewMode("users")}>
+    User Management
+  </button>
+)}
+
 {isComm && (
   <button onClick={() => setViewMode("admin")}>
     Admin Dashboard
   </button>
 )}
+
       </header>
 
       <main>

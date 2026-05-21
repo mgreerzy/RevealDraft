@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Papa from "papaparse";
 import { supabase } from "../lib/supabase";
 
-export default function AdminDashboard({ profile, onSwitchToDraft }) {
+export default function AdminDashboard({ profile, onSwitchToDraft,onOpenUserManagement }) {
   const [activeTab, setActiveTab] = useState("settings");
 
   const [drafts, setDrafts] = useState([]);
@@ -17,6 +17,9 @@ export default function AdminDashboard({ profile, onSwitchToDraft }) {
   const [phaseOrder, setPhaseOrder] = useState("female_first");
   const [pickSeconds, setPickSeconds] = useState(90);
   const [status, setStatus] = useState("setup");
+  const [coachEmailMessage, setCoachEmailMessage] = useState("");
+  const [playerEmailMessage, setPlayerEmailMessage] = useState("");
+  const [emailSignature, setEmailSignature] = useState("");
 
   const [teamName, setTeamName] = useState("");
   const [coachUserId, setCoachUserId] = useState("");
@@ -178,6 +181,69 @@ async function sendCoachInvite(team) {
   alert("Coach invite sent");
 
   await loadCoachInvites();
+}
+
+async function sendTestDraftEmail() {
+  if (!profile?.email) {
+    return alert("No signed-in user email found.");
+  }
+
+  const response = await fetch("/api/send-results", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to: profile.email,
+      subject: `${draftName || "Draft"} - Test Email`,
+      html: `
+        <div style="font-family:Arial,sans-serif;padding:24px;">
+          <h1>RevealDraft Test Email</h1>
+
+          <p>This is a test email for <strong>${draftName || "Draft"}</strong>.</p>
+
+          ${
+            coachEmailMessage
+              ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:12px;padding:14px;margin:16px 0;color:#78350f;">
+                  <strong>Coach Email Message Preview:</strong><br/>
+                  ${coachEmailMessage.replace(/\n/g, "<br/>")}
+                </div>`
+              : ""
+          }
+
+          ${
+            playerEmailMessage
+              ? `<div style="background:#dbeafe;border:1px solid #60a5fa;border-radius:12px;padding:14px;margin:16px 0;color:#1e3a8a;">
+                  <strong>Player Email Message Preview:</strong><br/>
+                  ${playerEmailMessage.replace(/\n/g, "<br/>")}
+                </div>`
+              : ""
+          }
+
+          ${
+            emailSignature
+              ? `<hr/><p>${emailSignature.replace(/\n/g, "<br/>")}</p>`
+              : ""
+          }
+        </div>
+      `,
+    }),
+  });
+
+  let result = {};
+
+  try {
+    result = await response.json();
+  } catch {
+    result = {};
+  }
+
+  if (!response.ok) {
+    console.error(result);
+    return alert(result.error || "Test email failed.");
+  }
+
+  alert(`Test email sent to ${profile.email}`);
 }
 
 async function clearCoachInvite(inviteId) {
@@ -556,6 +622,10 @@ async function completeDraft() {
 	    ? Number(salaryCapAmount || 0)
 	    : null,
 	auto_pick_mode: autoPickMode,
+
+	coach_email_message: coachEmailMessage,
+	player_email_message: playerEmailMessage,
+	email_signature: emailSignature,
       })
       .select()
       .single();
@@ -604,7 +674,17 @@ async function completeDraft() {
 	  salaryCapType === "salary_cap"
 	    ? Number(salaryCapAmount || 0)
 	    : null,
+
+        coach_email_message:
+          coachEmailMessage,
+
+        player_email_message:
+          playerEmailMessage,
+
+        email_signature:
+          emailSignature,
       })
+
       .eq("id", selectedDraft.id);
 
     if (error) return alert(error.message);
@@ -1008,10 +1088,6 @@ async function logAdminAudit(action, details = {}) {
           Players
         </button>
 
-        <button onClick={() => setActiveTab("users")}>
-          Users
-        </button>
-
         <button onClick={() => setActiveTab("import")}>
           Import / Export
         </button>
@@ -1035,6 +1111,14 @@ async function logAdminAudit(action, details = {}) {
 	<button onClick={() => setActiveTab("commissionerAccess")}>
 	  Commissioner Access
 	</button>
+
+	{profile?.role === "admin" && (
+	  <button
+	    onClick={() => onOpenUserManagement()}
+	  >
+	    User Management
+	  </button>
+	)}
 
 	<button onClick={() => {
 	  setActiveTab("audit");
@@ -1373,142 +1457,252 @@ async function logAdminAudit(action, details = {}) {
   </section>
 )}
 
-        {activeTab === "settings" && (
-          <section className="admin-card">
-            <h2>Draft Settings</h2>
+{activeTab === "settings" && (
+  <section className="admin-card">
+    <h2>Draft Settings</h2>
 
-            <input
-              placeholder="Draft Name"
-              value={draftName}
-              onChange={(e) =>
-                setDraftName(e.target.value)
-              }
-            />
+    <div className="admin-form-grid">
 
-            <select
-              value={draftType}
-              onChange={(e) =>
-                setDraftType(e.target.value)
-              }
-            >
-              <option value="coed">Coed</option>
-              <option value="male_female">
-                Male/Female
-              </option>
-            </select>
+      <div className="admin-field">
+        <label>Draft Name</label>
+        <input
+          placeholder="Draft Name"
+          value={draftName}
+          onChange={(e) =>
+            setDraftName(e.target.value)
+          }
+        />
+      </div>
 
-            <select
-              value={phaseOrder}
-              onChange={(e) =>
-                setPhaseOrder(e.target.value)
-              }
-            >
-              <option value="female_first">
-                Females First
-              </option>
+      <div className="admin-field">
+        <label>Draft Type</label>
+        <select
+          value={draftType}
+          onChange={(e) =>
+            setDraftType(e.target.value)
+          }
+        >
+          <option value="coed">Coed</option>
+          <option value="male_female">
+            Male/Female
+          </option>
+        </select>
+      </div>
 
-              <option value="male_first">
-                Males First
-              </option>
-            </select>
+      <div className="admin-field">
+        <label>Draft Format</label>
+        <select
+          value={phaseOrder}
+          onChange={(e) =>
+            setPhaseOrder(e.target.value)
+          }
+        >
+          <option value="female_first">
+            Females First
+          </option>
 
-            <input
-              type="number"
-              value={pickSeconds}
-              onChange={(e) =>
-                setPickSeconds(e.target.value)
-              }
-            />
+          <option value="male_first">
+            Males First
+          </option>
+        </select>
+      </div>
 
-            <select
-              value={status}
-              onChange={(e) =>
-                setStatus(e.target.value)
-              }
-            >
-              <option value="setup">Setup</option>
-              <option value="live">Live</option>
-              <option value="paused">Paused</option>
-              <option value="complete">Complete</option>
-            </select>
-	     
-<label>Auto Pick Mode</label>
+      <div className="admin-field">
+        <label>Pick Time (seconds)</label>
+        <input
+          type="number"
+          value={pickSeconds}
+          onChange={(e) =>
+            setPickSeconds(e.target.value)
+          }
+        />
+      </div>
 
-<select
-  value={autoPickMode}
-  onChange={(e)=>setAutoPickMode(e.target.value)}
->
-  <option value="disabled">Disabled</option>
-  <option value="queue_only">Queue Only</option>
-  <option value="queue_random">Queue Then Random</option>
-  <option value="random">Random Eligible Player</option>
-</select>
+      <div className="admin-field">
+        <label>Draft Status</label>
+        <select
+          value={status}
+          onChange={(e) =>
+            setStatus(e.target.value)
+          }
+        >
+          <option value="setup">Setup</option>
+          <option value="live">Live</option>
+          <option value="paused">Paused</option>
+          <option value="complete">Complete</option>
+        </select>
+      </div>
 
-	      <label>Salary Cap Type</label>
+      <hr className="admin-divider" />
 
-	      <select
-	        value={salaryCapType}
-	        onChange={(e) => setSalaryCapType(e.target.value)}
-	      >
-	        <option value="none">No Salary Cap</option>
-	        <option value="salary_cap">Salary Cap</option>
-	      </select>
+      <div className="admin-field">
+        <label>Auto Pick Mode</label>
 
-	      {salaryCapType === "salary_cap" && (
-	        <input
-	          type="number"
-	          placeholder="Salary cap amount"
-	          value={salaryCapAmount}
-	          onChange={(e) => setSalaryCapAmount(e.target.value)}
-	        />
-	      )}
+        <select
+          value={autoPickMode}
+          onChange={(e) =>
+            setAutoPickMode(e.target.value)
+          }
+        >
+          <option value="disabled">
+            Disabled
+          </option>
 
-            <div className="admin-actions">
-              <button onClick={createDraft}>
-                Create Draft
-              </button>
+          <option value="queue_only">
+            Queue Only
+          </option>
 
-              <button onClick={updateDraft}>
-                Save Settings
-              </button>
+          <option value="queue_random">
+            Queue Then Random
+          </option>
 
-              <button onClick={randomizeDraftOrder}>
-                Randomize Draft Order
-              </button>
+          <option value="random">
+            Random Eligible Player
+          </option>
+        </select>
+      </div>
 
-              <button onClick={randomizePlayerNumbers}>
-                Randomize Player Numbers
-              </button>
+      <div className="admin-field">
+        <label>Salary Cap Type</label>
 
-              <button
-                onClick={resetDraftProgressOnly}
-                style={{ background: "#b91c1c" }}
-              >
-                Reset Picks & Queues
-              </button>
+        <select
+          value={salaryCapType}
+          onChange={(e) =>
+            setSalaryCapType(e.target.value)
+          }
+        >
+          <option value="none">
+            No Salary Cap
+          </option>
 
-              <button
-                onClick={resetEntireDraft}
-                style={{ background: "#7f1d1d" }}
-              >
-                Reset Entire Draft
-              </button>
+          <option value="salary_cap">
+            Salary Cap
+          </option>
+        </select>
+      </div>
 
-	      <button
-  		onClick={completeDraft}
-		  style={{
-		    background: "#16a34a",
-		    border: "1px solid #22c55e",
-		    color: "white",
-		    fontWeight: 800,
-		  }}
-		>
-		  Complete Draft
-		</button>
+      {salaryCapType === "salary_cap" && (
+        <div className="admin-field">
+          <label>Salary Cap Amount</label>
 
-            </div>
-          </section>
-        )}
+          <input
+            type="number"
+            placeholder="Salary cap amount"
+            value={salaryCapAmount}
+            onChange={(e) =>
+              setSalaryCapAmount(e.target.value)
+            }
+          />
+        </div>
+      )}
+
+    </div>
+
+    <div className="admin-button-grid">
+
+      <button onClick={createDraft}>
+        Create Draft
+      </button>
+
+      <button onClick={updateDraft}>
+        Save Settings
+      </button>
+
+      <button onClick={randomizeDraftOrder}>
+        Randomize Draft Order
+      </button>
+
+      <button onClick={randomizePlayerNumbers}>
+        Randomize Player Numbers
+      </button>
+
+      <button
+        className="danger"
+        onClick={resetDraftProgressOnly}
+      >
+        Reset Picks & Queues
+      </button>
+
+      <button
+        className="danger"
+        onClick={resetEntireDraft}
+      >
+        Reset Entire Draft
+      </button>
+
+      <button
+        className="success"
+        onClick={completeDraft}
+      >
+        Complete Draft
+      </button>
+
+    </div>
+
+    <div className="email-settings">
+
+      <div className="admin-field">
+        <label>
+          Coach Email Message
+        </label>
+
+        <textarea
+          value={coachEmailMessage}
+          onChange={(e) =>
+            setCoachEmailMessage(
+              e.target.value
+            )
+          }
+          placeholder="Optional message shown at the top of coach roster emails.  Save Settings above after changes.  If you do not want a custom message, clear/delete the contents of this box and Save Settings above."
+        />
+      </div>
+
+      <div className="admin-field">
+        <label>
+          Player Email Message
+        </label>
+
+        <textarea
+          value={playerEmailMessage}
+          onChange={(e) =>
+            setPlayerEmailMessage(
+              e.target.value
+            )
+          }
+          placeholder="Optional message shown at the top of drafted player emails.  Save Settings above after changes.  If you do not want a custom message, clear/delete the contents of this box and Save Settings above."
+        />
+      </div>
+
+      <div className="admin-field">
+        <label>Email Signature</label>
+
+        <textarea
+          value={emailSignature}
+          onChange={(e) =>
+            setEmailSignature(
+              e.target.value
+            )
+          }
+          placeholder="Commissioner name, league info, contact details, etc.  Save Settings above after changes.  If you do not want a custom signature, clear/delete the contents of this box and Save Settings above."
+        />
+      </div>
+
+      <button
+        onClick={sendTestDraftEmail}
+        style={{
+          marginTop: 8,
+          background: "#0a65ff",
+          border: "1px solid #60a5fa",
+          color: "white",
+          fontWeight: 900,
+        }}
+      >
+        Send Test Email to Me
+      </button>
+
+    </div>
+  </section>
+)}
 
         {activeTab === "teams" && (
           <section className="admin-card">
@@ -1744,140 +1938,6 @@ teams.map((t) => {
 	    )}
 	  </section>
 	)}
-
-        {activeTab === "users" && (
-          <section className="admin-card">
-            <h2>Users</h2>
-
-            <h3>Create User</h3>
-
-            <input
-              placeholder="First Name"
-              value={newFirstName}
-              onChange={(e) => setNewFirstName(e.target.value)}
-            />
-
-            <input
-              placeholder="Last Name"
-              value={newLastName}
-              onChange={(e) => setNewLastName(e.target.value)}
-            />
-            
-            <input
-              placeholder="Email"
-              value={newUserEmail}
-              onChange={(e) =>
-                setNewUserEmail(e.target.value)
-              }
-            />
-
-            <input
-              type="password"
-              placeholder="Password"
-              value={newUserPassword}
-              onChange={(e) =>
-                setNewUserPassword(e.target.value)
-              }
-            />
-
-            <select
-              value={newUserRole}
-              onChange={(e) =>
-                setNewUserRole(e.target.value)
-              }
-            >
-              <option value="admin">admin</option>
-              <option value="commissioner">
-                commissioner
-              </option>
-              <option value="coach">
-                coach
-              </option>
-              <option value="viewer">
-                viewer
-              </option>
-            </select>
-
-            <button onClick={createUser}>
-              Create User
-            </button>
-
-            <h3>Existing Users</h3>
-
-            {profiles.length === 0 ? (
-              <p>No users found.</p>
-            ) : (
-              profiles.map((p) => (
-                <div
-                  key={p.id}
-                  className="admin-row"
-                >
-                  <span>{`${p.first_name || ""} ${p.last_name || ""}`.trim()} ({p.email})</span>
-
-		  <select
-		    value={p.role || "coach"}
-		    onChange={(e) =>
-		      updateRole(
-		        p.id,
-		        e.target.value
-		      )
-		    }
-		  >
-		    <option value="admin">
-		      admin
-		    </option>
-
-		    <option value="commissioner">
-		      commissioner
-		    </option>
-
-		    <option value="coach">
-		      coach
-		    </option>
-
-		    <option value="viewer">
-		      viewer
-		    </option>
-		  </select>
-
-		  <input
-		    placeholder="Phone Number"
-		    defaultValue={p.phone || ""}
-		    onBlur={(e) =>
-		      updateProfileField(
-		        p.id,
-		        "phone",
-		        e.target.value
-		      )
-		    }
-		  />
-
-		  <input
-		    placeholder="Facebook Profile URL"
-		    defaultValue={p.facebook_url || ""}
-		    onBlur={(e) =>
-		      updateProfileField(
-		        p.id,
-		        "facebook_url",
-		        e.target.value
-		      )
-		    }
-		  />
-
-		  {profile?.role === "admin" && (
-		    <button
-		      onClick={() =>
-		        resetUserPassword(p.id, p.email)
-		      }
-		    >
-		      Reset Password
-		    </button>
-		  )}
-                </div>
-              ))
-            )}
-          </section>
-        )}
 
         {activeTab === "import" && (
           <section className="admin-card">

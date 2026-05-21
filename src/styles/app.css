@@ -382,11 +382,97 @@ main{
 }
 
 .admin-card {
-  max-width: 700px;
-  background: #0b1b31;
-  border: 1px solid #1f5ca8;
-  border-radius: 14px;
-  padding: 24px;
+  max-width: 980px;
+  padding: 28px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(15, 37, 83, 0.92), rgba(7, 18, 42, 0.92));
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.admin-card h2 {
+  margin-bottom: 22px;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.admin-field label {
+  font-size: 14px;
+  font-weight: 800;
+  opacity: 0.9;
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  background: rgba(3, 10, 28, 0.72);
+  color: white;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+
+.admin-field textarea {
+  min-height: 88px;
+  resize: vertical;
+  line-height: 1.35;
+}
+
+.admin-divider {
+  margin: 12px 0 4px;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.admin-button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.admin-button-grid button {
+  min-height: 46px;
+  border-radius: 10px;
+  font-weight: 900;
+}
+
+.admin-button-grid .danger {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
+.admin-button-grid .success {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+}
+
+.email-settings {
+  margin-top: 22px;
+  display: grid;
+  gap: 18px;
+}
+
+@media (max-width: 700px) {
+  .admin-card {
+    padding: 18px;
+  }
+
+  .admin-button-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-card label {
