@@ -183,7 +183,7 @@ async function sendCoachInvite(team) {
   await loadCoachInvites();
 }
 
-async function sendTestDraftEmail() {
+async function sendTestCoachEmail() {
   if (!profile?.email) {
     return alert("No signed-in user email found.");
   }
@@ -193,36 +193,55 @@ async function sendTestDraftEmail() {
     headers: {
       "Content-Type": "application/json",
     },
+
     body: JSON.stringify({
       to: profile.email,
-      subject: `${draftName || "Draft"} - Test Email`,
-      html: `
-        <div style="font-family:Arial,sans-serif;padding:24px;">
-          <h1>RevealDraft Test Email</h1>
 
-          <p>This is a test email for <strong>${draftName || "Draft"}</strong>.</p>
+      subject: `${draftName} - Coach Email Preview`,
+
+      html: `
+        <div style="font-family:Arial,sans-serif;padding:24px;line-height:1.5;">
+          <h1>RevealDraft Coach Email Preview</h1>
+
+          <p>
+            Your draft roster for
+            <strong>${draftName}</strong>
+            is below.
+          </p>
 
           ${
             coachEmailMessage
-              ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:12px;padding:14px;margin:16px 0;color:#78350f;">
-                  <strong>Coach Email Message Preview:</strong><br/>
+              ? `
+                <div style="
+                  background:#fef3c7;
+                  border:1px solid #f59e0b;
+                  border-radius:12px;
+                  padding:14px;
+                  margin:16px 0;
+                  color:#78350f;
+                ">
                   ${coachEmailMessage.replace(/\n/g, "<br/>")}
-                </div>`
+                </div>
+              `
               : ""
           }
 
-          ${
-            playerEmailMessage
-              ? `<div style="background:#dbeafe;border:1px solid #60a5fa;border-radius:12px;padding:14px;margin:16px 0;color:#1e3a8a;">
-                  <strong>Player Email Message Preview:</strong><br/>
-                  ${playerEmailMessage.replace(/\n/g, "<br/>")}
-                </div>`
-              : ""
-          }
+          <h2>Sample Team Roster</h2>
+
+          <ul>
+            <li>Jane Smith — SS</li>
+            <li>Mike Johnson — OF</li>
+            <li>Sarah Williams — 2B</li>
+          </ul>
 
           ${
             emailSignature
-              ? `<hr/><p>${emailSignature.replace(/\n/g, "<br/>")}</p>`
+              ? `
+                <hr style="margin-top:24px"/>
+                <p>
+                  ${emailSignature.replace(/\n/g, "<br/>")}
+                </p>
+              `
               : ""
           }
         </div>
@@ -230,20 +249,86 @@ async function sendTestDraftEmail() {
     }),
   });
 
-  let result = {};
-
-  try {
-    result = await response.json();
-  } catch {
-    result = {};
+  if (!response.ok) {
+    return alert("Failed to send test coach email.");
   }
+
+  alert(`Test coach email sent to ${profile.email}`);
+}
+
+async function sendTestPlayerEmail() {
+  if (!profile?.email) {
+    return alert("No signed-in user email found.");
+  }
+
+  const response = await fetch("/api/send-results", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify({
+      to: profile.email,
+
+      subject: `${draftName} - Player Email Preview`,
+
+      html: `
+        <div style="font-family:Arial,sans-serif;padding:24px;line-height:1.5;">
+          <h1>RevealDraft Player Email Preview</h1>
+
+          <p>
+            You were drafted to
+            <strong>Team Demo</strong>
+            in
+            <strong>${draftName}</strong>.
+          </p>
+
+          ${
+            playerEmailMessage
+              ? `
+                <div style="
+                  background:#dbeafe;
+                  border:1px solid #60a5fa;
+                  border-radius:12px;
+                  padding:14px;
+                  margin:16px 0;
+                  color:#1e3a8a;
+                ">
+                  ${playerEmailMessage.replace(/\n/g, "<br/>")}
+                </div>
+              `
+              : ""
+          }
+
+          <h2>Coach Information</h2>
+
+          <p>
+            Coach: John Doe<br/>
+            Email: coach@example.com<br/>
+            Phone: (555) 555-5555<br/>
+            Facebook: facebook.com/johndoe
+          </p>
+
+          ${
+            emailSignature
+              ? `
+                <hr style="margin-top:24px"/>
+                <p>
+                  ${emailSignature.replace(/\n/g, "<br/>")}
+                </p>
+              `
+              : ""
+          }
+        </div>
+      `,
+    }),
+  });
 
   if (!response.ok) {
-    console.error(result);
-    return alert(result.error || "Test email failed.");
+    return alert("Failed to send test player email.");
   }
 
-  alert(`Test email sent to ${profile.email}`);
+  alert(`Test player email sent to ${profile.email}`);
 }
 
 async function clearCoachInvite(inviteId) {
@@ -1687,18 +1772,38 @@ async function logAdminAudit(action, details = {}) {
         />
       </div>
 
-      <button
-        onClick={sendTestDraftEmail}
+      <div
         style={{
-          marginTop: 8,
-          background: "#0a65ff",
-          border: "1px solid #60a5fa",
-          color: "white",
-          fontWeight: 900,
+          display: "flex",
+          gap: 12,
+          marginTop: 10,
+          flexWrap: "wrap",
         }}
       >
-        Send Test Email to Me
-      </button>
+        <button
+          onClick={sendTestCoachEmail}
+          style={{
+            background: "#0a65ff",
+            border: "1px solid #60a5fa",
+            color: "white",
+            fontWeight: 900,
+          }}
+        >
+          Send Test Coach Email
+        </button>
+      
+        <button
+          onClick={sendTestPlayerEmail}
+          style={{
+            background: "#2563eb",
+            border: "1px solid #60a5fa",
+            color: "white",
+            fontWeight: 900,
+          }}
+        >
+          Send Test Player Email
+        </button>
+      </div>
 
     </div>
   </section>
